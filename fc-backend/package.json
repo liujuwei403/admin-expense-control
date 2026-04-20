@@ -1,0 +1,9 @@
+{
+  "name": "sso-backend",
+  "version": "1.0.0",
+  "description": "公司 SSO 登录后端，部署于阿里云函数计算 Web 函数",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  }
+}

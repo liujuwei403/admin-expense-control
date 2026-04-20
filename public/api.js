@@ -15,11 +15,7 @@ const SSO_APP_ID    = '1876691221';
 const SSO_FC_BASE   = 'https://sso-bacend-xzfk-tayrqiioai.cn-hangzhou.fcapp.run';
 const SSO_LOGIN_URL = `https://sso.100tal.com/portal/login/${SSO_APP_ID}`;
 
-// ─── OCR 配置（阿里云市场增值税发票识别）───────────────────────────
-const OCR_API_URL  = 'https://dgfp.market.alicloudapi.com/ocrservice/invoice';
-const OCR_APP_CODE = 'REMOVED_OCR_CODE';
-// 如直连被 CORS 阻止，走代理：
-const OCR_PROXY_URL = ''; // 部署代理后填入，为空则直连
+// ─── AI 发票识别（通过 FC 后端代理调用 GLM-5V）────────────────────
 
 const HEADERS = {
   Authorization: `Bearer ${TEABLE_TOKEN}`,
@@ -254,20 +250,16 @@ async function handleSSOCallback(ssoToken) {
 
 // ─── 阿里云 OCR 发票识别 ────────────────────────────────────────
 async function ocrVatInvoice(base64Image) {
-  const imageData = base64Image.replace(/^data:image\/\w+;base64,/, '');
-  const url = OCR_PROXY_URL || OCR_API_URL;
-  const headers = { 'Content-Type': 'application/json; charset=UTF-8' };
-  if (!OCR_PROXY_URL) {
-    headers['Authorization'] = 'APPCODE ' + OCR_APP_CODE;
-  }
-  const res = await fetch(url, {
+  const jwt = localStorage.getItem('sso_jwt');
+  if (!jwt) throw new Error('未登录，请先用 SSO 登录');
+  const res = await fetch(`${SSO_FC_BASE}/ocr`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ img: imageData }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64: base64Image, jwt }),
   });
   if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error('OCR识别失败: ' + (res.status === 403 ? 'CORS被阻止，需部署代理' : err));
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '识别失败');
   }
   return await res.json();
 }

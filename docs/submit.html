@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>行政费控 - 费用提报</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body>
   <aside class="sidebar" id="sidebar"></aside>
@@ -343,33 +344,44 @@
       if (input.files[0]) processInvoice(input.files[0]);
     }
 
+    async function pdfFirstPageToImage(file) {
+      if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js 未加载');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      return canvas.toDataURL('image/png');
+    }
+
     function processInvoice(file) {
       if (file.size > 5 * 1024 * 1024) { showToast('文件不能超过 5MB', 'error'); return; }
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const reader = new FileReader();
       reader.onload = async () => {
         invoiceBase64 = reader.result;
-        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
         document.getElementById('uploadPreview').innerHTML = isPdf
           ? `<div style="font-size:13px;color:var(--text-secondary);padding:8px 0">${file.name} (${(file.size/1024).toFixed(0)}KB)</div>`
           : `<img src="${invoiceBase64}">`;
 
-        if (!OCR_API_URL && !OCR_PROXY_URL) {
-          showToast('发票已上传（OCR 服务未配置，请手动填写发票信息）', 'info');
-          return;
-        }
-
         const ocrDiv = document.getElementById('ocrResult');
         ocrDiv.style.display = 'block';
         ocrDiv.className = 'ocr-result ocr-loading';
-        document.getElementById('ocrText').textContent = '正在识别发票...';
+        document.getElementById('ocrText').textContent = isPdf ? '正在解析 PDF...' : '正在识别发票...';
 
         try {
-          const result = await ocrVatInvoice(invoiceBase64);
+          const imageForAI = isPdf ? await pdfFirstPageToImage(file) : invoiceBase64;
+          if (isPdf) document.getElementById('ocrText').textContent = '正在识别发票...';
+          const result = await ocrVatInvoice(imageForAI);
           applyOcrResult(result);
         } catch (e) {
           ocrDiv.className = 'ocr-result';
-          document.getElementById('ocrText').textContent = 'OCR 识别失败: ' + e.message;
-          showToast('OCR 识别失败', 'error');
+          document.getElementById('ocrText').textContent = '识别失败: ' + e.message;
+          showToast('识别失败', 'error');
         }
       };
       reader.readAsDataURL(file);
@@ -377,14 +389,11 @@
 
     function applyOcrResult(result) {
       ocrRawResult = JSON.stringify(result);
-      // 阿里云市场返回格式: { code, data: { word, ... } } 或直接 data 对象
-      const d = result.data || result;
-      // 兼容不同字段名（阿里云市场不同产品返回略有差异）
-      const invoiceType = d.invoiceType || d.InvoiceType || d.type || '';
-      const totalAmount = d.sumAmount || d.totalAmount || d.invoiceAmount || d.AmountInFiguers || d.TotalAmount || '';
-      const taxRate = d.taxRate || d.TaxRate || '';
-      const sellerName = d.sellerName || d.SellerName || d.payee || '';
-      const purchaserName = d.purchaserName || d.PurchaserName || d.payer || '';
+      const invoiceType = result.invoiceType || '';
+      const totalAmount = result.totalAmount || '';
+      const taxRate = result.taxRate || '';
+      const sellerName = result.sellerName || '';
+      const purchaserName = result.purchaserName || '';
 
       // 发票类型映射
       if (invoiceType) {

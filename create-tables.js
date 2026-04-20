@@ -2,7 +2,7 @@
 // 场景配置表使用参考数据 Base 中的已有表（bseRLEsbDQqPra4KxpN / tblAxpoD2Rh7PhJzJLG）
 // 运行方式: node create-tables.js
 const TEABLE_BASE = 'https://yach-teable.zhiyinlou.com';
-const TEABLE_TOKEN = 'teable_accrGoCYgJwpCP4Hy7H_CJNj3/ERLDcxs8cNekS0vxalbXtPNbnTphkd5Qhccz8=';
+const TEABLE_TOKEN = 'REMOVED_TOKEN';
 const SPACE_ID = 'spc87WlhvxOSzOReHXp'; // 刘聚伟个人
 
 async function api(path, body) {
