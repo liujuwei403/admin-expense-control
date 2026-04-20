@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行政费控 - 审批中心</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main">
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('pending')">待审批</button>
+        <button class="tab" onclick="switchTab('history')">已处理</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>编号</th><th>费用类型</th><th>场景</th><th>金额</th><th>进度</th><th>提交人</th><th>操作</th>
+          </tr></thead>
+          <tbody id="approveBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="emptyState" style="display:none">
+        <div class="empty-state-text">暂无审批记录</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 审批弹窗 -->
+  <div class="modal-overlay" id="approveModal">
+    <div class="modal">
+      <div class="modal-title" id="modalTitle">审批</div>
+      <div id="modalContent"></div>
+      <div class="form-group" style="margin-top:12px">
+        <label class="form-label">审批意见</label>
+        <textarea class="form-textarea" id="approveRemark" placeholder="请填写审批意见"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeApproveModal()">取消</button>
+        <button class="btn btn-danger" onclick="doApprove('reject')">驳回</button>
+        <button class="btn btn-success" onclick="doApprove('approve')">通过</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    if (!requireLogin()) throw '';
+    renderNav('approve.html');
+
+    let allLedgers = [];
+    let currentTab = 'pending';
+    let currentRecord = null;
+
+    const PENDING_STATE = '费控提报中';
+    const FINAL_STATES = ['费控提报完成', '已付款'];
+
+    (async () => {
+      try {
+        allLedgers = await teableGet(TABLE_LEDGER);
+        renderList();
+      } catch (e) {
+        showToast('加载数据失败: ' + e.message, 'error');
+      }
+    })();
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab')[tab === 'pending' ? 0 : 1].classList.add('active');
+      renderList();
+    }
+
+    function renderList() {
+      let data;
+      if (currentTab === 'pending') {
+        data = allLedgers.filter(r => r.fields['当前进度'] === PENDING_STATE);
+      } else {
+        data = allLedgers.filter(r => FINAL_STATES.includes(r.fields['当前进度']));
+      }
+      data.sort((a, b) => (b.fields['编号'] || 0) - (a.fields['编号'] || 0));
+
+      if (data.length === 0) {
+        document.getElementById('approveBody').innerHTML = '';
+        document.getElementById('emptyState').style.display = '';
+        return;
+      }
+      document.getElementById('emptyState').style.display = 'none';
+
+      document.getElementById('approveBody').innerHTML = data.map(r => {
+        const f = r.fields;
+        const actionBtn = currentTab === 'pending'
+          ? `<button class="btn btn-sm btn-primary" onclick="openApprove('${r.id}')">审批</button>`
+          : `<span style="color:var(--success);font-size:12px">已处理</span>`;
+        return `<tr>
+          <td>${f['编号'] || '-'}</td>
+          <td>${f['费用类型'] || '-'}</td>
+          <td>${f['费用场景说明'] || '-'}</td>
+          <td>${formatMoney(f['付款金额'])}</td>
+          <td>${statusBadge(f['当前进度'])}</td>
+          <td>${f['提交人'] || '-'}</td>
+          <td>${actionBtn}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function openApprove(id) {
+      currentRecord = allLedgers.find(r => r.id === id);
+      if (!currentRecord) return;
+      const f = currentRecord.fields;
+
+      // 尝试加载提报明细
+      let submitDetail = '';
+      try {
+        const submits = await teableGet(TABLE_SUBMIT);
+        const match = submits.find(s => s.fields['台账编号'] === String(f['编号']));
+        if (match) {
+          const sf = match.fields;
+          submitDetail = `
+            <span style="color:var(--text-muted)">法律主体:</span><span>${sf['法律主体'] || '-'}</span>
+            <span style="color:var(--text-muted)">供应商:</span><span>${sf['供应商/收款方'] || '-'}</span>
+            <span style="color:var(--text-muted)">事由描述:</span><span>${sf['事由描述'] || '-'}</span>
+            <span style="color:var(--text-muted)">合同编号:</span><span>${sf['合同编号'] || '-'}</span>
+          `;
+        }
+      } catch {}
+
+      document.getElementById('modalTitle').textContent = `审批 - ${f['费用类型']} #${f['编号']}`;
+      document.getElementById('modalContent').innerHTML = `
+        <div style="font-size:13px;display:grid;grid-template-columns:auto 1fr;gap:6px 12px">
+          <span style="color:var(--text-muted)">场景:</span><span>${f['费用场景说明'] || '-'}</span>
+          <span style="color:var(--text-muted)">金额:</span><span>${formatMoney(f['付款金额'])}</span>
+          <span style="color:var(--text-muted)">提交人:</span><span>${f['提交人'] || '-'}</span>
+          <span style="color:var(--text-muted)">日期:</span><span>${formatDate(f['提交费控日期'])}</span>
+          ${submitDetail}
+        </div>
+      `;
+      document.getElementById('approveRemark').value = '';
+      document.getElementById('approveModal').classList.add('show');
+    }
+
+    function closeApproveModal() {
+      document.getElementById('approveModal').classList.remove('show');
+    }
+
+    async function doApprove(action) {
+      if (!currentRecord) return;
+      const remark = document.getElementById('approveRemark').value.trim();
+
+      try {
+        if (action === 'approve') {
+          await teableUpdate(TABLE_LEDGER, currentRecord.id, {
+            '当前进度': '费控提报完成',
+            '备注': remark ? ('审批通过: ' + remark) : '审批通过',
+          });
+          showToast('已通过');
+        } else {
+          await teableUpdate(TABLE_LEDGER, currentRecord.id, {
+            '当前进度': '待预提',
+            '备注': remark ? ('驳回: ' + remark) : '已驳回',
+          });
+          showToast('已驳回', 'warn');
+        }
+        trackAction(`${action === 'approve' ? '通过' : '驳回'}审批:${currentRecord.fields['编号']}`, 'approve.html');
+        closeApproveModal();
+        allLedgers = await teableGet(TABLE_LEDGER, true);
+        renderList();
+      } catch (e) {
+        showToast('操作失败: ' + e.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

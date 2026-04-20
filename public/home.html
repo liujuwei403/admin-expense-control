@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行政费控 - 首页</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main">
+    <div class="stat-grid" id="stats"></div>
+    <div class="nav-grid">
+      <a class="nav-card" href="submit.html">
+        <span class="nav-card-icon">+</span>
+        <span class="nav-card-label">新建提报</span>
+      </a>
+      <a class="nav-card" href="ledger.html">
+        <span class="nav-card-icon">#</span>
+        <span class="nav-card-label">费用台账</span>
+      </a>
+      <a class="nav-card" href="approve.html">
+        <span class="nav-card-icon">&#10003;</span>
+        <span class="nav-card-label">审批中心</span>
+      </a>
+      <a class="nav-card" href="config.html">
+        <span class="nav-card-icon">*</span>
+        <span class="nav-card-label">场景配置</span>
+      </a>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px;font-weight:600;margin-bottom:12px">最近提报</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>编号</th><th>费用类型</th><th>场景</th><th>金额</th><th>进度</th><th>日期</th></tr></thead>
+          <tbody id="recentList"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="emptyState" style="display:none">
+        <div class="empty-state-text">暂无提报记录</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="api.js"></script>
+  <script>
+    if (!requireLogin()) throw '';
+    renderNav('home.html');
+
+    (async () => {
+      try {
+        const ledgers = await teableGet(TABLE_LEDGER);
+        const user = getCurrentUser();
+        const now = new Date();
+        const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+        const myLedgers = ledgers.filter(r => r.fields['提交人'] === user.account || r.fields['负责业务人'] === user.account);
+        const monthCount = myLedgers.filter(r => (r.fields['提交费控日期'] || '').startsWith(thisMonth)).length;
+        const pendingCount = ledgers.filter(r => !['费控提报完成','已付款'].includes(r.fields['当前进度'])).length;
+        const overdueCount = ledgers.filter(r => checkOverdue(r) === '逾期').length;
+        const paidSum = ledgers
+          .filter(r => r.fields['当前进度'] === '已付款' && (r.fields['实际付款日期'] || '').startsWith(thisMonth))
+          .reduce((s, r) => s + (r.fields['付款金额'] || 0), 0);
+
+        document.getElementById('stats').innerHTML = `
+          <div class="stat-card"><div class="stat-label">本月提报</div><div class="stat-value primary">${monthCount}</div></div>
+          <div class="stat-card"><div class="stat-label">待处理</div><div class="stat-value warning">${pendingCount}</div></div>
+          <div class="stat-card"><div class="stat-label">逾期项</div><div class="stat-value danger">${overdueCount}</div></div>
+          <div class="stat-card"><div class="stat-label">本月已付</div><div class="stat-value success">${formatMoney(paidSum)}</div></div>
+        `;
+
+        const recent = ledgers
+          .sort((a, b) => (b.fields['编号'] || 0) - (a.fields['编号'] || 0))
+          .slice(0, 5);
+
+        if (recent.length === 0) {
+          document.getElementById('emptyState').style.display = '';
+        } else {
+          document.getElementById('recentList').innerHTML = recent.map(r => {
+            const f = r.fields;
+            return `<tr>
+              <td>${f['编号'] || '-'}</td>
+              <td>${f['费用类型'] || '-'}</td>
+              <td>${f['费用场景说明'] || '-'}</td>
+              <td>${formatMoney(f['付款金额'])}</td>
+              <td>${statusBadge(f['当前进度'])}</td>
+              <td>${formatDate(f['提交费控日期'])}</td>
+            </tr>`;
+          }).join('');
+        }
+      } catch (e) {
+        showToast('加载数据失败: ' + e.message, 'error');
+      }
+    })();
+  </script>
+</body>
+</html>

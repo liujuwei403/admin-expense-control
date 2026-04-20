@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行政费控 - 费用台账</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main">
+    <div class="card">
+      <div class="filter-bar">
+        <select class="form-select" id="filterType"><option value="">全部类型</option></select>
+        <select class="form-select" id="filterProgress">
+          <option value="">全部进度</option>
+          <option>待预提</option><option>预提完成</option><option>待收账单</option>
+          <option>已收账单</option><option>费控提报中</option><option>费控提报完成</option>
+          <option>待付款</option><option>已付款</option>
+        </select>
+        <select class="form-select" id="filterOverdue">
+          <option value="">全部状态</option><option>逾期</option><option>正常</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>编号</th><th>费用类型</th><th>场景</th><th>金额</th>
+            <th>预提/实付</th><th>进度</th><th>逾期</th><th>提交人</th><th>操作</th>
+          </tr></thead>
+          <tbody id="ledgerBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="emptyState" style="display:none">
+        <div class="empty-state-text">暂无台账记录</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 详情弹窗 -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal">
+      <div class="modal-title">台账详情</div>
+      <div id="detailContent"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">关闭</button>
+        <button class="btn btn-primary" id="advanceBtn" onclick="advanceProgress()">推进</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    if (!requireLogin()) throw '';
+    renderNav('ledger.html');
+
+    let allLedgers = [];
+    let currentRecord = null;
+
+    const PROGRESS_FLOW = ['待预提','预提完成','待收账单','已收账单','费控提报中','费控提报完成','待付款','已付款'];
+
+    (async () => {
+      try {
+        allLedgers = await teableGet(TABLE_LEDGER);
+        // 动态填充费用类型筛选
+        const types = [...new Set(allLedgers.map(r => r.fields['费用类型']).filter(Boolean))];
+        const filterType = document.getElementById('filterType');
+        types.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          filterType.appendChild(opt);
+        });
+        renderTable();
+      } catch (e) {
+        showToast('加载台账失败: ' + e.message, 'error');
+      }
+    })();
+
+    document.getElementById('filterType').addEventListener('change', renderTable);
+    document.getElementById('filterProgress').addEventListener('change', renderTable);
+    document.getElementById('filterOverdue').addEventListener('change', renderTable);
+
+    function renderTable() {
+      const fType = document.getElementById('filterType').value;
+      const fProgress = document.getElementById('filterProgress').value;
+      const fOverdue = document.getElementById('filterOverdue').value;
+
+      let data = allLedgers;
+      if (fType) data = data.filter(r => r.fields['费用类型'] === fType);
+      if (fProgress) data = data.filter(r => r.fields['当前进度'] === fProgress);
+      if (fOverdue) data = data.filter(r => checkOverdue(r) === fOverdue);
+
+      data.sort((a, b) => (b.fields['编号'] || 0) - (a.fields['编号'] || 0));
+
+      if (data.length === 0) {
+        document.getElementById('ledgerBody').innerHTML = '';
+        document.getElementById('emptyState').style.display = '';
+        return;
+      }
+      document.getElementById('emptyState').style.display = 'none';
+
+      document.getElementById('ledgerBody').innerHTML = data.map(r => {
+        const f = r.fields;
+        const od = checkOverdue(r);
+        return `<tr>
+          <td>${f['编号'] || '-'}</td>
+          <td>${f['费用类型'] || '-'}</td>
+          <td>${f['费用场景说明'] || '-'}</td>
+          <td>${formatMoney(f['付款金额'])}</td>
+          <td>${f['预提/实付'] || '-'}</td>
+          <td>${statusBadge(f['当前进度'])}</td>
+          <td><span style="color:${od === '逾期' ? 'var(--danger)' : 'var(--success)'}">${od}</span></td>
+          <td>${f['提交人'] || '-'}</td>
+          <td><button class="btn btn-sm btn-ghost" onclick="showDetail('${r.id}')">详情</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function showDetail(id) {
+      currentRecord = allLedgers.find(r => r.id === id);
+      if (!currentRecord) return;
+      const f = currentRecord.fields;
+
+      const fields = [
+        ['编号', f['编号']],
+        ['费用类型', f['费用类型']],
+        ['场景说明', f['费用场景说明']],
+        ['付款金额', formatMoney(f['付款金额'])],
+        ['预提/实付', f['预提/实付']],
+        ['当前进度', f['当前进度']],
+        ['提交人', f['提交人']],
+        ['提交日期', formatDate(f['提交费控日期'])],
+        ['付款截止', formatDate(f['付款截止日期'])],
+        ['实际付款', formatDate(f['实际付款日期'])],
+        ['备注', f['备注'] || f['预提备注'] || '-'],
+      ];
+
+      document.getElementById('detailContent').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;font-size:13px">
+          ${fields.map(([k,v]) => `<div style="color:var(--text-muted)">${k}</div><div>${v || '-'}</div>`).join('')}
+        </div>
+      `;
+
+      const progress = f['当前进度'];
+      const advBtn = document.getElementById('advanceBtn');
+      if (progress === '已付款') {
+        advBtn.style.display = 'none';
+      } else {
+        advBtn.style.display = '';
+        const nextIdx = PROGRESS_FLOW.indexOf(progress) + 1;
+        advBtn.textContent = '推进至: ' + (PROGRESS_FLOW[nextIdx] || '');
+      }
+
+      document.getElementById('detailModal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('detailModal').classList.remove('show');
+    }
+
+    async function advanceProgress() {
+      if (!currentRecord) return;
+      const f = currentRecord.fields;
+      const curIdx = PROGRESS_FLOW.indexOf(f['当前进度']);
+      if (curIdx < 0 || curIdx >= PROGRESS_FLOW.length - 1) return;
+
+      const next = PROGRESS_FLOW[curIdx + 1];
+      try {
+        await teableUpdate(TABLE_LEDGER, currentRecord.id, { '当前进度': next });
+        showToast('已推进至: ' + next);
+        trackAction('推进台账:' + f['编号'] + ' -> ' + next, 'ledger.html');
+        closeModal();
+        allLedgers = await teableGet(TABLE_LEDGER, true);
+        renderTable();
+      } catch (e) {
+        showToast('推进失败: ' + e.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

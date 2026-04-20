@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行政费控提报系统 - 登录</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-title">行政费控提报系统</div>
+      <div class="login-subtitle">请登录以继续</div>
+      <button class="btn btn-primary" style="width:100%;padding:12px" onclick="location.href=SSO_LOGIN_URL">公司统一登录 (SSO)</button>
+      <div class="login-divider">或手动登录</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input class="form-input" id="loginAccount" placeholder="账号">
+        <input class="form-input" id="loginNick" placeholder="昵称">
+        <button class="btn btn-ghost" style="width:100%" onclick="manualLogin()">登录</button>
+      </div>
+      <div id="loginMsg" style="margin-top:12px;font-size:13px;color:var(--danger)"></div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    // SSO 回调处理
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const ssoToken = params.get('token') || params.get('code');
+      if (ssoToken) {
+        try {
+          await handleSSOCallback(ssoToken);
+        } catch (e) {
+          document.getElementById('loginMsg').textContent = e.message;
+        }
+        return;
+      }
+      if (getCurrentUser()) {
+        location.href = 'home.html';
+      }
+    })();
+
+    async function manualLogin() {
+      const account = document.getElementById('loginAccount').value.trim();
+      const nick = document.getElementById('loginNick').value.trim();
+      if (!account || !nick) {
+        document.getElementById('loginMsg').textContent = '请填写账号和昵称';
+        return;
+      }
+      try {
+        let record = await findUser(account);
+        if (record) {
+          const f = record.fields;
+          if (f['状态'] === '已禁用') {
+            document.getElementById('loginMsg').textContent = '账号已被禁用';
+            return;
+          }
+          localStorage.setItem('xzfk_user', JSON.stringify({
+            id: record.id, account: f['账号'], nickname: f['昵称'],
+            department: f['部门'] || '', role: f['角色'] || '员工', approver: f['审批人'] || '',
+          }));
+        } else {
+          const newUser = await teableCreate(TABLE_USER, {
+            '账号': account, '昵称': nick, '部门': '', '角色': '员工',
+            '状态': '已激活', '注册时间': new Date().toISOString(),
+          });
+          localStorage.setItem('xzfk_user', JSON.stringify({
+            id: newUser.id, account, nickname: nick,
+            department: '', role: '员工', approver: '',
+          }));
+        }
+        trackAction('登录', 'index.html');
+        location.href = 'home.html';
+      } catch (e) {
+        document.getElementById('loginMsg').textContent = '登录失败: ' + e.message;
+      }
+    }
+  </script>
+</body>
+</html>

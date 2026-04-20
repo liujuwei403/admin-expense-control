@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行政费控 - 管理后台</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main">
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('users')">用户管理</button>
+        <button class="tab" onclick="switchTab('stats')">统计报表</button>
+        <button class="tab" onclick="switchTab('logs')">操作日志</button>
+      </div>
+
+      <div id="panelUsers">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>账号</th><th>昵称</th><th>部门</th><th>角色</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="userBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="panelStats" style="display:none">
+        <div class="stat-grid" id="adminStats"></div>
+        <div id="typeBreakdown" style="margin-top:16px"></div>
+      </div>
+
+      <div id="panelLogs" style="display:none">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>时间</th><th>账号</th><th>昵称</th><th>页面</th><th>操作</th></tr></thead>
+            <tbody id="logBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 编辑用户弹窗 -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <div class="modal-title">编辑用户</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">角色</label>
+        <select class="form-select" id="editRole"><option>员工</option><option>审批人</option><option>管理员</option></select>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">部门</label>
+        <input class="form-input" id="editDept">
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">状态</label>
+        <select class="form-select" id="editStatus"><option>已激活</option><option>已禁用</option></select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeEdit()">取消</button>
+        <button class="btn btn-primary" onclick="saveUser()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    if (!requireLogin()) throw '';
+    renderNav('admin.html');
+
+    let allUsers = [];
+    let allLedgers = [];
+    let allLogs = [];
+    let editingId = null;
+
+    (async () => {
+      try {
+        [allUsers, allLedgers, allLogs] = await Promise.all([
+          teableGet(TABLE_USER),
+          teableGet(TABLE_LEDGER),
+          teableGet(TABLE_LOG),
+        ]);
+        renderUsers();
+        renderStats();
+        renderLogs();
+      } catch (e) {
+        showToast('加载数据失败: ' + e.message, 'error');
+      }
+    })();
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      const idx = { users: 0, stats: 1, logs: 2 }[tab];
+      document.querySelectorAll('.tab')[idx].classList.add('active');
+      document.getElementById('panelUsers').style.display = tab === 'users' ? '' : 'none';
+      document.getElementById('panelStats').style.display = tab === 'stats' ? '' : 'none';
+      document.getElementById('panelLogs').style.display = tab === 'logs' ? '' : 'none';
+    }
+
+    function renderUsers() {
+      document.getElementById('userBody').innerHTML = allUsers.map(r => {
+        const f = r.fields;
+        return `<tr>
+          <td>${f['账号'] || '-'}</td>
+          <td>${f['昵称'] || '-'}</td>
+          <td>${f['部门'] || '-'}</td>
+          <td>${f['角色'] || '-'}</td>
+          <td>${f['状态'] || '-'}</td>
+          <td><button class="btn btn-sm btn-ghost" onclick="openEdit('${r.id}')">编辑</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderStats() {
+      const total = allLedgers.length;
+      const overdueCount = allLedgers.filter(r => checkOverdue(r) === '逾期').length;
+      const totalAmount = allLedgers.reduce((s, r) => s + (r.fields['付款金额'] || 0), 0);
+      const paidCount = allLedgers.filter(r => r.fields['当前进度'] === '已付款').length;
+
+      document.getElementById('adminStats').innerHTML = `
+        <div class="stat-card"><div class="stat-label">总台账</div><div class="stat-value">${total}</div></div>
+        <div class="stat-card"><div class="stat-label">已付款</div><div class="stat-value success">${paidCount}</div></div>
+        <div class="stat-card"><div class="stat-label">逾期</div><div class="stat-value danger">${overdueCount}</div></div>
+        <div class="stat-card"><div class="stat-label">总金额</div><div class="stat-value primary">${formatMoney(totalAmount)}</div></div>
+      `;
+
+      // 按类型统计
+      const byType = {};
+      allLedgers.forEach(r => {
+        const t = r.fields['费用类型'] || '其他';
+        if (!byType[t]) byType[t] = { count: 0, amount: 0 };
+        byType[t].count++;
+        byType[t].amount += r.fields['付款金额'] || 0;
+      });
+
+      document.getElementById('typeBreakdown').innerHTML = `
+        <h4 style="font-size:14px;font-weight:600;margin-bottom:8px">按费用类型</h4>
+        <table><thead><tr><th>类型</th><th>笔数</th><th>金额</th></tr></thead>
+        <tbody>${Object.entries(byType).map(([t, v]) =>
+          `<tr><td>${t}</td><td>${v.count}</td><td>${formatMoney(v.amount)}</td></tr>`
+        ).join('')}</tbody></table>
+      `;
+    }
+
+    function renderLogs() {
+      const recent = allLogs
+        .sort((a, b) => (b.fields['时间'] || '').localeCompare(a.fields['时间'] || ''))
+        .slice(0, 100);
+      document.getElementById('logBody').innerHTML = recent.map(r => {
+        const f = r.fields;
+        return `<tr>
+          <td>${f['时间'] ? new Date(f['时间']).toLocaleString('zh-CN') : '-'}</td>
+          <td>${f['账号'] || '-'}</td>
+          <td>${f['昵称'] || '-'}</td>
+          <td>${f['页面'] || '-'}</td>
+          <td>${f['操作'] || '-'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openEdit(id) {
+      const record = allUsers.find(r => r.id === id);
+      if (!record) return;
+      editingId = id;
+      document.getElementById('editRole').value = record.fields['角色'] || '员工';
+      document.getElementById('editDept').value = record.fields['部门'] || '';
+      document.getElementById('editStatus').value = record.fields['状态'] || '已激活';
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    function closeEdit() {
+      document.getElementById('editModal').classList.remove('show');
+    }
+
+    async function saveUser() {
+      if (!editingId) return;
+      try {
+        await teableUpdate(TABLE_USER, editingId, {
+          '角色': document.getElementById('editRole').value,
+          '部门': document.getElementById('editDept').value,
+          '状态': document.getElementById('editStatus').value,
+        });
+        showToast('用户信息已更新');
+        trackAction('编辑用户:' + editingId, 'admin.html');
+        closeEdit();
+        allUsers = await teableGet(TABLE_USER, true);
+        renderUsers();
+      } catch (e) {
+        showToast('更新失败: ' + e.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

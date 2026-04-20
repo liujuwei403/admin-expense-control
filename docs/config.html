@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>行政费控 - 场景配置</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+  <header class="topbar" id="topbar"></header>
+  <main class="main">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div>
+          <span style="font-size:15px;font-weight:600">场景配置表</span>
+          <span style="font-size:12px;color:var(--text-muted);margin-left:8px" id="recordCount"></span>
+        </div>
+        <div class="filter-bar" style="margin-bottom:0">
+          <select class="form-select" id="filterType"><option value="">全部类型</option></select>
+        </div>
+      </div>
+      <div id="configList"></div>
+      <div class="empty-state" id="emptyState" style="display:none">
+        <div class="empty-state-text">暂无配置记录</div>
+      </div>
+    </div>
+  </main>
+
+  <script src="api.js"></script>
+  <script>
+    if (!requireLogin()) throw '';
+    renderNav('config.html');
+
+    let configRecords = [];
+
+    (async () => {
+      try {
+        configRecords = await loadConfigRecords(true);
+        document.getElementById('recordCount').textContent = `共 ${configRecords.length} 条`;
+
+        const types = [...new Set(configRecords.map(r => r.fields['费用类型']).filter(Boolean))];
+        const filterType = document.getElementById('filterType');
+        types.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t; opt.textContent = t;
+          filterType.appendChild(opt);
+        });
+        renderConfigs();
+      } catch (e) {
+        showToast('加载配置失败: ' + e.message, 'error');
+      }
+    })();
+
+    document.getElementById('filterType').addEventListener('change', renderConfigs);
+
+    function renderConfigs() {
+      const fType = document.getElementById('filterType').value;
+      let data = configRecords;
+      if (fType) data = data.filter(r => r.fields['费用类型'] === fType);
+
+      if (data.length === 0) {
+        document.getElementById('configList').innerHTML = '';
+        document.getElementById('emptyState').style.display = '';
+        return;
+      }
+      document.getElementById('emptyState').style.display = 'none';
+
+      document.getElementById('configList').innerHTML = data.map(r => {
+        const f = r.fields;
+        const responsible = f['负责人']?.title || f['负责人'] || '-';
+        const follower = Array.isArray(f['跟进人']) ? f['跟进人'].map(u => u.title || u).join(', ') : (f['跟进人'] || '-');
+
+        return `<div class="config-card">
+          <div class="config-card-header">
+            <div class="config-card-title">${f['场景说明'] || '-'}</div>
+            <span class="config-card-type">${f['费用类型'] || '-'}</span>
+          </div>
+          <div class="config-card-body">
+            <span class="config-field-label">付款方式</span><span class="config-field-value">${f['付款方式'] || '-'}</span>
+            <span class="config-field-label">付款频次</span><span class="config-field-value">${f['付款频次'] || '-'}</span>
+            <span class="config-field-label">法律主体</span><span class="config-field-value">${f['法律主体'] || '-'}</span>
+            <span class="config-field-label">供应商</span><span class="config-field-value">${f['供应商/收款方'] || '-'}</span>
+            <span class="config-field-label">合同编号</span><span class="config-field-value">${f['合同编号'] || '-'}</span>
+            <span class="config-field-label">是否预提</span><span class="config-field-value">${f['是否需要预提'] || '-'}</span>
+            <span class="config-field-label">费控单据类型</span><span class="config-field-value">${f['费控单据类型'] || '-'}</span>
+            <span class="config-field-label">费控费用类型</span><span class="config-field-value">${f['费控费用类型'] || '-'}</span>
+            <span class="config-field-label">费控费用项目</span><span class="config-field-value">${f['费控费用项目'] || '-'}</span>
+            <span class="config-field-label">费控战斗单元</span><span class="config-field-value">${f['费控战斗单元'] || '-'}</span>
+            <span class="config-field-label">费控分摊部门</span><span class="config-field-value">${f['费控分摊部门'] || '-'}</span>
+            <span class="config-field-label">费控现金事务</span><span class="config-field-value">${f['费控现金事务'] || '-'}</span>
+            <span class="config-field-label">负责人</span><span class="config-field-value">${responsible}</span>
+            <span class="config-field-label">跟进人</span><span class="config-field-value">${follower}</span>
+            <span class="config-field-label">合同期限</span><span class="config-field-value">${formatDate(f['合同开始日期'])} ~ ${formatDate(f['合同结束日期'])}</span>
+            <span class="config-field-label">备注</span><span class="config-field-value">${f['备注'] || '-'}</span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  </script>
+</body>
+</html>
