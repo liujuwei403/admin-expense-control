@@ -146,6 +146,11 @@ async function findUser(account) {
 function getCurrentUser() {
   const s = localStorage.getItem('xzfk_user');
   if (!s) return null;
+  const sso = getSavedSSO();
+  if (!sso) {
+    localStorage.removeItem('xzfk_user');
+    return null;
+  }
   return JSON.parse(s);
 }
 
@@ -159,7 +164,8 @@ function requireLogin() {
 
 function logout() {
   localStorage.removeItem('xzfk_user');
-  window.location.href = 'index.html';
+  localStorage.removeItem('sso_jwt');
+  window.location.href = 'https://sso.100tal.com/sso/logout?path=https://sso.100tal.com/portal/login/1876691221';
 }
 
 function isAdmin() {
