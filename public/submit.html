@@ -15,6 +15,9 @@
       <!-- 1. 场景选择 -->
       <div class="form-section">
         <div class="form-section-title">场景选择</div>
+        <div id="noPermissionHint" style="display:none;padding:10px 14px;background:#fff4e5;border:1px solid #ffb020;border-radius:6px;color:#7a4a00;font-size:13px;margin-bottom:10px">
+          您当前工号未关联任何场景（负责人或跟进人），暂无提报权限。如需权限请联系管理员。
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">费用类型<span class="required">*</span></label>
@@ -220,10 +223,41 @@
     document.getElementById('s_period').valueAsDate = new Date();
 
     // ─── 加载配置数据 & 填充费用类型 ───────────────────────────
+    function extractWorkcode(title) {
+      if (!title) return '';
+      const idx = title.lastIndexOf('-');
+      return idx >= 0 ? title.slice(idx + 1) : '';
+    }
+
+    function isScenarioVisible(record, myWorkcode) {
+      const f = record.fields;
+      const owner = f['负责人'];
+      if (owner && extractWorkcode(owner.title) === myWorkcode) return true;
+      const followers = Array.isArray(f['跟进人']) ? f['跟进人'] : [];
+      return followers.some(u => u && extractWorkcode(u.title) === myWorkcode);
+    }
+
+    function showNoPermissionHint() {
+      document.getElementById('noPermissionHint').style.display = 'block';
+      document.getElementById('s_type').disabled = true;
+    }
+
     (async () => {
       try {
-        configRecords = await loadConfigRecords();
+        const allRecords = await loadConfigRecords();
+        if (isApprover()) {
+          configRecords = allRecords;
+        } else {
+          const sso = getSavedSSO();
+          const myWorkcode = sso && sso.payload && sso.payload.workcode;
+          configRecords = myWorkcode
+            ? allRecords.filter(r => isScenarioVisible(r, myWorkcode))
+            : [];
+        }
         populateFeeTypeDropdown();
+        if (configRecords.length === 0 && !isApprover()) {
+          showNoPermissionHint();
+        }
       } catch (e) {
         showToast('加载配置数据失败: ' + e.message, 'error');
       }
