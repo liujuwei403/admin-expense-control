@@ -11,8 +11,8 @@ const REF_CONFIG_TABLE = 'tblAxpoD2Rh7PhJzJLG';
 const REF_CONFIG_VIEW  = 'viwh50JByJ1SrEtmiNg';
 
 // ─── SSO 配置 ─────────────────────────────────────────────────────
-const SSO_APP_ID    = '1475405957';
-const SSO_FC_BASE   = 'https://liujuwei-sso-mmyoppocwk.cn-hangzhou.fcapp.run';
+const SSO_APP_ID    = '1876691221';
+const SSO_FC_BASE   = 'https://sso-bacend-xzfk-tayrqiioai.cn-hangzhou.fcapp.run';
 const SSO_LOGIN_URL = `https://sso.100tal.com/portal/login/${SSO_APP_ID}`;
 
 // ─── OCR 配置（阿里云市场增值税发票识别）───────────────────────────
