@@ -265,20 +265,27 @@ async function ocrVatInvoice(base64Image) {
 }
 
 // ─── 事由描述日期解析 ───────────────────────────────────────────
+// 支持「2026年1月1日」「2026年1月」两种格式
+//   有日：直接采用
+//   无日：起始默认 01，结束默认该月最后一天
 function parseBenefitDates(description) {
-  const pattern = /(\d{4})\s*年\s*(\d{1,2})\s*月/g;
+  const pattern = /(\d{4})\s*年\s*(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日)?/g;
   const matches = [...description.matchAll(pattern)];
   if (matches.length === 0) return { from: null, to: null };
 
-  const fromYear = parseInt(matches[0][1]);
-  const fromMonth = parseInt(matches[0][2]);
-  const fromDate = `${fromYear}-${String(fromMonth).padStart(2, '0')}-01`;
+  const pad = n => String(n).padStart(2, '0');
 
-  const lastMatch = matches[matches.length - 1];
-  const toYear = parseInt(lastMatch[1]);
-  const toMonth = parseInt(lastMatch[2]);
-  const lastDay = new Date(toYear, toMonth, 0).getDate();
-  const toDate = `${toYear}-${String(toMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  const first = matches[0];
+  const fromYear = parseInt(first[1]);
+  const fromMonth = parseInt(first[2]);
+  const fromDay = first[3] ? parseInt(first[3]) : 1;
+  const fromDate = `${fromYear}-${pad(fromMonth)}-${pad(fromDay)}`;
+
+  const last = matches[matches.length - 1];
+  const toYear = parseInt(last[1]);
+  const toMonth = parseInt(last[2]);
+  const toDay = last[3] ? parseInt(last[3]) : new Date(toYear, toMonth, 0).getDate();
+  const toDate = `${toYear}-${pad(toMonth)}-${pad(toDay)}`;
 
   return { from: fromDate, to: toDate };
 }
