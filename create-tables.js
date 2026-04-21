@@ -1,4 +1,4 @@
-// 一次性脚本：创建行政费控提报系统的 Teable Base + 业务数据表
+// 一次性脚本：创建快提快报的 Teable Base + 业务数据表
 // 场景配置表使用参考数据 Base 中的已有表（bseRLEsbDQqPra4KxpN / tblAxpoD2Rh7PhJzJLG）
 // 运行方式: node create-tables.js
 const TEABLE_BASE = 'https://yach-teable.zhiyinlou.com';
@@ -30,7 +30,7 @@ function sel(name, choices) {
 async function main() {
   // 1. 创建 Base
   console.log('Creating Base...');
-  const base = await api(`/api/base`, { spaceId: SPACE_ID, name: '行政费控提报系统' });
+  const base = await api(`/api/base`, { spaceId: SPACE_ID, name: '快提快报' });
   const BASE_ID = base.id;
   console.log('  BASE_ID:', BASE_ID);
 
@@ -140,7 +140,7 @@ async function main() {
   console.log(`const TABLE_SUBMIT  = '${t2.id}';  // 费用提报表`);
   console.log(`const TABLE_USER    = '${t3.id}';  // 用户表`);
   console.log(`const TABLE_LOG     = '${t4.id}';  // 操作日志表`);
-  console.log(`const BASE_ID       = '${BASE_ID}';  // 行政费控提报系统`);
+  console.log(`const BASE_ID       = '${BASE_ID}';  // 快提快报`);
   console.log(`// 场景配置表（参考数据 Base，只读）:`);
   console.log(`const REF_CONFIG_TABLE = 'tblAxpoD2Rh7PhJzJLG';`);
   console.log(`const REF_CONFIG_VIEW  = 'viwh50JByJ1SrEtmiNg';`);

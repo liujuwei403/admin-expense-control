@@ -1,0 +1,289 @@
+app:
+  description: 识别增值税发票关键字段（发票类型/价税合计/税率/销方/购方）
+  icon: 🧾
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: invoice-ocr
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .WEBP
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - remote_url
+      - local_file
+      enabled: true
+      number_limits: 1
+    opening_statement: '上传一张发票图片，返回结构化识别结果。'
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        sourceType: start
+        targetType: llm
+      id: start-llm
+      source: start_node
+      sourceHandle: source
+      target: llm_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        sourceType: llm
+        targetType: code
+      id: llm-code
+      source: llm_node
+      sourceHandle: source
+      target: code_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        sourceType: code
+        targetType: answer
+      id: code-answer
+      source: code_node
+      sourceHandle: source
+      target: answer_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 通过聊天上传发票图片
+        selected: false
+        title: 开始
+        type: start
+        variables: []
+      height: 90
+      id: start_node
+      position:
+        x: 80
+        y: 282
+      positionAbsolute:
+        x: 80
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 视觉大模型识别发票，返回 JSON 文本
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params:
+            max_tokens: 1024
+            temperature: 0.1
+          mode: chat
+          name: ''
+          provider: ''
+        prompt_template:
+        - role: system
+          text: |
+            你是专业的中国增值税发票识别专家。请识别用户上传的发票图片，严格按以下 JSON 格式返回结果，只输出一行 JSON，不要解释，不要使用 markdown 代码块：
+
+            {"invoiceType":"发票类型","totalAmount":价税合计数字,"taxRate":税率小数,"sellerName":"销售方名称","purchaserName":"购买方名称"}
+
+            字段识别规则：
+
+            1. invoiceType（发票类型）：以发票图片顶部标题为准，值必须严格等于以下之一：
+               - 增值税专用发票
+               - 增值税普通发票
+               - 电子发票（增值税专用发票）
+               - 电子发票（增值税普通发票）
+               - 其他
+               注意：如果发票顶部写"电子发票（增值税专用发票）"，就返回完整字符串，不要简写为"增值税专用发票"；同理电子普通发票也保留"电子发票（...）"前缀。括号用中文全角括号。
+
+            2. totalAmount（价税合计 / 含税总额）：
+               - 取"价税合计（小写）"栏的数字金额，即发票最终付款金额（含税）
+               - 不要取"合计"行的"金额"列（那是不含税金额）
+               - 不要取"税额"列
+               - 只返回纯数字，不带 ¥、元、逗号。示例：发票上"（小写）¥238060.42" → 238060.42
+               - 识别不到填 0
+
+            3. taxRate（税率）：
+               - 用小数表示：13% 填 0.13，6% 填 0.06，3% 填 0.03，9% 填 0.09，1% 填 0.01，0% 填 0
+               - 若发票有多行不同税率，取最大值
+               - 识别不到填 0
+
+            4. sellerName（销售方名称）：
+               - 取"销售方信息"区块的"名称"字段完整值
+               - 不要返回纳税人识别号、地址、电话、开户行
+
+            5. purchaserName（购买方名称）：
+               - 取"购买方信息"区块的"名称"字段完整值
+               - 不要返回纳税人识别号、地址、电话、开户行
+
+            识别不到的字符串字段填 ""，数字字段填 0。
+        - role: user
+          text: 请识别这张发票的关键字段，按 system 指令要求严格输出 JSON。
+        selected: false
+        title: 视觉识别
+        type: llm
+        variables: []
+        vision:
+          configs:
+            detail: high
+            variable_selector:
+            - sys
+            - files
+          enabled: true
+      height: 118
+      id: llm_node
+      position:
+        x: 380
+        y: 282
+      positionAbsolute:
+        x: 380
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    - data:
+        code: |
+          import json
+          import re
+
+          def main(raw: str) -> dict:
+              default = {
+                  "invoiceType": "",
+                  "totalAmount": 0,
+                  "taxRate": 0,
+                  "sellerName": "",
+                  "purchaserName": "",
+                  "normalized": "{}",
+                  "raw": raw or "",
+              }
+              if not raw:
+                  return default
+              s = re.sub(r"```json\s*|\s*```", "", raw).strip()
+              m = re.search(r"\{[\s\S]*\}", s)
+              if not m:
+                  return default
+              try:
+                  d = json.loads(m.group(0))
+              except Exception:
+                  return default
+              def num(v):
+                  try:
+                      return float(v or 0)
+                  except Exception:
+                      return 0
+              parsed = {
+                  "invoiceType": str(d.get("invoiceType", "") or ""),
+                  "totalAmount": num(d.get("totalAmount")),
+                  "taxRate": num(d.get("taxRate")),
+                  "sellerName": str(d.get("sellerName", "") or ""),
+                  "purchaserName": str(d.get("purchaserName", "") or ""),
+              }
+              return {
+                  **parsed,
+                  "normalized": json.dumps(parsed, ensure_ascii=False),
+                  "raw": raw,
+              }
+        code_language: python3
+        desc: 解析 LLM 返回的 JSON，容错
+        outputs:
+          invoiceType:
+            children: null
+            type: string
+          totalAmount:
+            children: null
+            type: number
+          taxRate:
+            children: null
+            type: number
+          sellerName:
+            children: null
+            type: string
+          purchaserName:
+            children: null
+            type: string
+          normalized:
+            children: null
+            type: string
+          raw:
+            children: null
+            type: string
+        selected: false
+        title: 解析JSON
+        type: code
+        variables:
+        - value_selector:
+          - llm_node
+          - text
+          variable: raw
+      height: 82
+      id: code_node
+      position:
+        x: 680
+        y: 282
+      positionAbsolute:
+        x: 680
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    - data:
+        answer: '{{#code_node.normalized#}}'
+        desc: 输出解析后的 JSON（前端直接 JSON.parse）
+        selected: false
+        title: 直接回复
+        type: answer
+        variables: []
+      height: 107
+      id: answer_node
+      position:
+        x: 980
+        y: 282
+      positionAbsolute:
+        x: 980
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.7

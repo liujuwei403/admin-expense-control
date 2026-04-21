@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-行政费控提报系统 — 纯静态前端应用，通过 Teable REST API 读写数据，通过阿里云函数计算（FC）后端做 SSO 回调；AI OCR 由前端直连 PaddleOCR 完成。**项目设计为公司内网使用**。
+快提快报 — 纯静态前端应用，通过 Teable REST API 读写数据，通过阿里云函数计算（FC）后端做 SSO 回调；AI OCR 由前端直连 PaddleOCR 完成。**项目设计为公司内网使用**。
 
 ## 三层架构
 

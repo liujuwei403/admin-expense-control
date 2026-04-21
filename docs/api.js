@@ -470,7 +470,7 @@ function renderNav(activePage) {
 
   document.getElementById('sidebar').innerHTML = `
     <div class="sidebar-logo">
-      <span class="logo-text">行政费控</span>
+      <span class="logo-text">快提快报</span>
     </div>
     <nav class="sidebar-nav">${navLinks}</nav>
     <div class="sidebar-footer">

@@ -1,0 +1,209 @@
+app:
+  description: |
+    发票识别 - URL 输入版（绕开 sys.files 限制）
+
+    【背景】
+    好未来开放平台 /openapi/v2/agent/chat 已证实不会把 body.files 字段透传到 Dify 工作流的
+    sys.files 变量。为此工作流使用 Start 节点的业务 file 变量 invoice_file（区别于 sys.files），
+    API 调用时通过 inputs 字段传入 Dify 标准 file 对象，URL 包装在 file 对象的 url 字段里。
+
+    【API 调用方式】
+    POST https://yach-oapi.zhiyinlou.com/openapi/v2/agent/chat?access_token=...
+
+    Body (JSON)：
+    {
+      "access_token": "...",
+      "biz_id": "工号",
+      "query": "请识别这张发票",
+      "msg_type": "text",
+      "inputs": "{\"invoice_file\":{\"type\":\"image\",\"transfer_method\":\"remote_url\",\"url\":\"https://公网图片URL\"}}"
+    }
+
+    inputs 注意点：
+    - 它是 JSON 字符串（外层再 JSON.stringify 一次，非对象）
+    - invoice_file 的值是 Dify file 对象，三字段必填：type/transfer_method/url
+    - transfer_method 固定 remote_url（URL 模式），url 必须公网 HTTPS 可 GET
+    - 图片可用 Teable presigned URL 或 yach-openapi COS URL
+
+    【输出 JSON schema】
+    { invoiceType: string, totalAmount: number, taxRate: number, sellerName: string, purchaserName: string }
+  icon: "🧾"
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: 发票识别-URL输入版
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: true
+      allowed_file_types:
+        - image
+      allowed_file_upload_methods:
+        - remote_url
+        - local_file
+      number_limits: 1
+    opening_statement: 你好，请上传发票图片，或通过 API inputs.invoice_file 传入图片。
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: start
+          targetType: llm
+        id: edge-start-llm
+        source: start_node
+        sourceHandle: source
+        target: llm_node
+        targetHandle: target
+        type: custom
+        zIndex: 0
+      - data:
+          isInIteration: false
+          isInLoop: false
+          sourceType: llm
+          targetType: answer
+        id: edge-llm-answer
+        source: llm_node
+        sourceHandle: source
+        target: answer_node
+        targetHandle: target
+        type: custom
+        zIndex: 0
+    nodes:
+      - data:
+          desc: 入参 query(对话内容) + invoice_file(发票图片 file 变量)
+          selected: false
+          title: 开始
+          type: start
+          variables:
+            - label: 对话内容
+              max_length: null
+              options: []
+              required: false
+              type: paragraph
+              variable: query
+            - label: 发票图片
+              max_length: null
+              options: []
+              required: true
+              type: file
+              variable: invoice_file
+              allowed_file_types:
+                - image
+              allowed_file_upload_methods:
+                - remote_url
+                - local_file
+        height: 115
+        id: start_node
+        position:
+          x: 80
+          y: 282
+        positionAbsolute:
+          x: 80
+          y: 282
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 视觉 LLM 读取 invoice_file 识别发票，输出 JSON
+          memory:
+            query_prompt_template: '{{#sys.query#}}'
+            role_prefix:
+              assistant: ''
+              user: ''
+            window:
+              enabled: false
+              size: 10
+          model:
+            completion_params:
+              temperature: 0.1
+              max_tokens: 2000
+            mode: chat
+            name: ''
+            provider: ''
+          prompt_template:
+            - id: sys-prompt-uuid
+              role: system
+              text: |
+                你是一个专业的发票识别助手。严格按以下 JSON schema 输出，不要输出任何解释或 markdown，仅输出 JSON：
+                {
+                  "invoiceType": "发票类型，如 '电子发票（增值税专用发票）'",
+                  "totalAmount": 价税合计金额(数字,保留两位小数),
+                  "taxRate": 税率(小数形式, 如 13% 输出 0.13),
+                  "sellerName": "销售方名称",
+                  "purchaserName": "购买方名称"
+                }
+                未识别到的字段：字符串填 "" ，数字填 0。
+            - id: user-prompt-uuid
+              role: user
+              text: 请识别这张发票的信息。
+          selected: false
+          title: LLM 发票识别
+          type: llm
+          variables: []
+          vision:
+            enabled: true
+            configs:
+              detail: high
+              variable_selector:
+                - start_node
+                - invoice_file
+        height: 98
+        id: llm_node
+        position:
+          x: 380
+          y: 282
+        positionAbsolute:
+          x: 380
+          y: 282
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+      - data:
+          answer: '{{#llm_node.text#}}'
+          desc: 直接输出 LLM 返回的 JSON
+          title: 回复
+          type: answer
+          variables: []
+        height: 107
+        id: answer_node
+        position:
+          x: 680
+          y: 282
+        positionAbsolute:
+          x: 680
+          y: 282
+        selected: false
+        sourcePosition: right
+        targetPosition: left
+        type: custom
+        width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.7

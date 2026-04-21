@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发票 AI 识别测试</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div id="app"></div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script>
+    const { createApp, ref } = Vue;
+
+    const AI_API_URL = 'http://ai-service.tal.com/openai-compatible/v1/chat/completions';
+    const AI_TOKEN   = '300000485:61b228c575d42cbd37a266636c5b7364';
+
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    }
+
+    const OCR_PROMPT = `你是一名发票识别专家。请识别下面这张发票图片，严格按以下 JSON 格式返回结果，不要有任何其他文字或 markdown 代码块：
+{"invoiceType":"发票类型","totalAmount":价税合计金额数字,"taxRate":税率小数,"sellerName":"销售方名称","purchaserName":"购买方名称"}
+
+要求：
+- invoiceType 取值范围：增值税专用发票 / 增值税普通发票 / 电子发票（增值税专用发票）/ 电子发票（增值税普通发票）/ 其他
+- totalAmount 为纯数字（价税合计），识别不到填 0
+- taxRate 为小数（如 0.06、0.13），有多个税率取最大值，识别不到填 0
+- sellerName 和 purchaserName 为字符串，识别不到填 ""`;
+
+    createApp({
+      setup() {
+        const fileName    = ref('');
+        const previewUrl  = ref('');
+        const isPdf       = ref(false);
+        const processing  = ref(false);
+        const status      = ref('');
+        const result      = ref(null);
+        const rawResponse = ref('');
+        const errorMsg    = ref('');
+        const rawError    = ref('');
+
+        async function pdfFirstPageToImage(file) {
+          const buf  = await file.arrayBuffer();
+          const pdf  = await pdfjsLib.getDocument({ data: buf }).promise;
+          const page = await pdf.getPage(1);
+          const vp   = page.getViewport({ scale: 2 });
+          const cvs  = document.createElement('canvas');
+          cvs.width  = vp.width;
+          cvs.height = vp.height;
+          await page.render({ canvasContext: cvs.getContext('2d'), viewport: vp }).promise;
+          return cvs.toDataURL('image/png');
+        }
+
+        async function callAI(imageBase64) {
+          const res = await fetch(AI_API_URL, {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + AI_TOKEN,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'glm-5v-turbo',
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'text', text: OCR_PROMPT },
+                  { type: 'image_url', image_url: { url: imageBase64 } },
+                ],
+              }],
+              temperature: 0.1,
+              max_tokens: 1024,
+            }),
+          });
+          if (!res.ok) {
+            const txt = await res.text().catch(() => '');
+            throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
+          }
+          return await res.json();
+        }
+
+        function parseAIContent(content) {
+          let c = (content || '').replace(/```json\s*|\s*```/g, '').trim();
+          const m = c.match(/\{[\s\S]*\}/);
+          if (!m) throw new Error('AI 返回非 JSON: ' + c.slice(0, 300));
+          return JSON.parse(m[0]);
+        }
+
+        async function handleFile(e) {
+          const file = e.target.files[0];
+          if (!file) return;
+          if (file.size > 5 * 1024 * 1024) { alert('文件超过 5MB'); return; }
+
+          fileName.value  = file.name;
+          result.value    = null;
+          rawResponse.value = '';
+          errorMsg.value  = '';
+          rawError.value  = '';
+          isPdf.value     = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+          processing.value = true;
+
+          try {
+            if (isPdf.value) {
+              status.value = '正在解析 PDF...';
+              const reader = new FileReader();
+              await new Promise((resolve) => { reader.onload = resolve; reader.readAsDataURL(file); });
+              previewUrl.value = '';
+
+              const imgBase64 = await pdfFirstPageToImage(file);
+              previewUrl.value = imgBase64;
+
+              status.value = '正在调用 AI 识别...';
+              const resp = await callAI(imgBase64);
+              rawResponse.value = JSON.stringify(resp, null, 2);
+              const content = resp.choices?.[0]?.message?.content || '';
+              result.value = parseAIContent(content);
+            } else {
+              status.value = '正在读取图片...';
+              const reader = new FileReader();
+              const dataUrl = await new Promise((resolve, reject) => {
+                reader.onload  = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+              previewUrl.value = dataUrl;
+
+              status.value = '正在调用 AI 识别...';
+              const resp = await callAI(dataUrl);
+              rawResponse.value = JSON.stringify(resp, null, 2);
+              const content = resp.choices?.[0]?.message?.content || '';
+              result.value = parseAIContent(content);
+            }
+            status.value = '识别完成';
+          } catch (err) {
+            console.error('识别失败', err);
+            errorMsg.value = err.message || String(err);
+            rawError.value = err.stack || err.toString();
+            status.value = '识别失败';
+          } finally {
+            processing.value = false;
+          }
+        }
+
+        return {
+          fileName, previewUrl, isPdf, processing,
+          status, result, rawResponse, errorMsg, rawError,
+          handleFile,
+        };
+      },
+
+      template: `
+        <div class="max-w-4xl mx-auto p-6">
+          <header class="mb-6">
+            <h1 class="text-2xl font-bold text-slate-800">发票 AI 识别测试</h1>
+            <p class="text-sm text-slate-500 mt-1">
+              模型 glm-5v-turbo · 直接调用
+              <code class="bg-slate-100 px-1.5 py-0.5 rounded text-xs">ai-service.tal.com</code>
+              （需在内网环境访问本页面）
+            </p>
+          </header>
+
+          <section class="bg-white rounded-lg shadow-sm border border-slate-200 p-6 mb-4">
+            <label class="block">
+              <div class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition">
+                <div class="text-4xl mb-2">📄</div>
+                <div class="text-slate-700 font-medium">点击选择发票（JPG / PNG / PDF）</div>
+                <div class="text-xs text-slate-500 mt-1">最大 5MB</div>
+              </div>
+              <input type="file" accept="image/*,.pdf" class="hidden" @change="handleFile">
+            </label>
+            <div v-if="fileName" class="mt-3 text-sm text-slate-600">
+              已选择：<span class="font-medium">{{ fileName }}</span>
+              <span v-if="isPdf" class="ml-2 text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">PDF 已转为图片</span>
+            </div>
+          </section>
+
+          <section v-if="status" class="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mb-4">
+            <div class="flex items-center gap-2">
+              <span v-if="processing" class="inline-block w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></span>
+              <span class="font-medium" :class="{'text-red-600': status === '识别失败', 'text-green-600': status === '识别完成'}">
+                {{ status }}
+              </span>
+            </div>
+          </section>
+
+          <section v-if="errorMsg" class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <div class="text-red-800 font-medium mb-1">错误信息</div>
+            <div class="text-sm text-red-700 whitespace-pre-wrap">{{ errorMsg }}</div>
+            <details v-if="rawError" class="mt-2 text-xs">
+              <summary class="cursor-pointer text-red-600">展开堆栈</summary>
+              <pre class="mt-1 bg-white p-2 rounded border border-red-100 overflow-auto">{{ rawError }}</pre>
+            </details>
+          </section>
+
+          <div v-if="previewUrl || result" class="grid md:grid-cols-2 gap-4">
+            <section v-if="previewUrl" class="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+              <div class="text-sm font-medium text-slate-700 mb-2">发票预览</div>
+              <img :src="previewUrl" class="w-full rounded border border-slate-100">
+            </section>
+
+            <section v-if="result" class="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+              <div class="text-sm font-medium text-slate-700 mb-2">识别结果</div>
+              <dl class="space-y-2 text-sm">
+                <div class="flex">
+                  <dt class="w-24 text-slate-500">发票类型</dt>
+                  <dd class="flex-1 text-slate-800">{{ result.invoiceType || '-' }}</dd>
+                </div>
+                <div class="flex">
+                  <dt class="w-24 text-slate-500">价税合计</dt>
+                  <dd class="flex-1 text-slate-800 font-mono">{{ result.totalAmount || '-' }}</dd>
+                </div>
+                <div class="flex">
+                  <dt class="w-24 text-slate-500">税率</dt>
+                  <dd class="flex-1 text-slate-800 font-mono">{{ result.taxRate || '-' }}</dd>
+                </div>
+                <div class="flex">
+                  <dt class="w-24 text-slate-500">销售方</dt>
+                  <dd class="flex-1 text-slate-800">{{ result.sellerName || '-' }}</dd>
+                </div>
+                <div class="flex">
+                  <dt class="w-24 text-slate-500">购买方</dt>
+                  <dd class="flex-1 text-slate-800">{{ result.purchaserName || '-' }}</dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+
+          <section v-if="rawResponse" class="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mt-4">
+            <details>
+              <summary class="cursor-pointer text-sm font-medium text-slate-700">AI 原始响应（调试用）</summary>
+              <pre class="mt-2 bg-slate-50 p-3 rounded text-xs overflow-auto max-h-96">{{ rawResponse }}</pre>
+            </details>
+          </section>
+        </div>
+      `,
+    }).mount('#app');
+  </script>
+</body>
+</html>
