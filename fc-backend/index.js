@@ -177,6 +177,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // OCR 代理：POST /ocr  body: { imageBase64, jwt }
+  // DEPRECATED 2026-04-21: 前端已直连 PaddleOCR，此路由保留仅用于紧急回滚，确认稳定后删除
   if (url.pathname === '/ocr' && req.method === 'POST') {
     try {
       const raw = await readBody(req);

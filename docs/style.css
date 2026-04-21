@@ -192,6 +192,26 @@ a { color: var(--primary); text-decoration: none; }
   background: var(--primary);
   border-radius: 2px;
 }
+/* ─── Collapsible (details/summary) ───────────────────────────── */
+details.collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+details.collapsible > summary::-webkit-details-marker { display: none; }
+details.collapsible > summary .collapse-caret {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+  margin-right: 2px;
+}
+details.collapsible[open] > summary .collapse-caret {
+  transform: rotate(90deg);
+}
+details.collapsible > summary:hover .collapse-caret {
+  color: var(--primary);
+}
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
 .form-row.single { grid-template-columns: 1fr; }
 .form-group { display: flex; flex-direction: column; gap: 4px; }

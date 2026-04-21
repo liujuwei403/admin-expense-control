@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>行政费控 - 费用提报</title>
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 </head>
 <body>
   <aside class="sidebar" id="sidebar"></aside>
@@ -35,9 +34,93 @@
         </div>
       </div>
 
-      <!-- 2. 费控映射（自动填充） -->
+      <!-- 2. 发票信息 -->
       <div class="form-section">
-        <div class="form-section-title">费控映射 <span class="auto-fill-badge">自动填充</span></div>
+        <div class="form-section-title">发票信息</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label class="form-label">发票<span class="required">*</span></label>
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">&#128206;</div>
+            <div class="upload-text">点击或拖拽上传发票（JPG/PNG/PDF，最大 5MB）</div>
+            <div class="upload-preview" id="uploadPreview"></div>
+          </div>
+          <input type="file" id="fileInput" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this)">
+        </div>
+        <div id="ocrResult" class="ocr-result" style="display:none">
+          <b>OCR 识别结果:</b> <span id="ocrText"></span>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label class="form-label">发票类型</label>
+            <select class="form-select" id="s_invoiceType">
+              <option value="">待识别</option>
+              <option>电子发票（增值税专用发票）</option>
+              <option>电子发票（增值税普通发票）</option>
+              <option>增值税专用发票</option>
+              <option>增值税普通发票</option>
+              <option>其他</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">税率</label>
+            <input class="form-input" id="s_taxRate" placeholder="如 0.06">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">单价</label>
+            <input class="form-input" type="number" step="0.01" id="s_amount" placeholder="金额（元）">
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 费用信息 -->
+      <div class="form-section">
+        <div class="form-section-title">费用信息</div>
+        <div class="form-row single">
+          <div class="form-group">
+            <label class="form-label">事由描述<span class="required">*</span></label>
+            <textarea class="form-textarea" id="s_reason" placeholder="申请报销XX年XX月XX日费用 到 XX年XX月XX日费用"></textarea>
+            <div class="form-hint">示例：申请报销2026年1月1日房租费用 到 2026年3月31日房租费用，含物业附加费</div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">受益日期从 <span class="auto-fill-badge">自动解析</span></label>
+            <input class="form-input" type="date" id="s_benefitFrom">
+          </div>
+          <div class="form-group">
+            <label class="form-label">受益日期到 <span class="auto-fill-badge">自动解析</span></label>
+            <input class="form-input" type="date" id="s_benefitTo">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">费用承担期间</label>
+            <input class="form-input" type="date" id="s_period">
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 附件上传 -->
+      <div class="form-section">
+        <div class="form-section-title">附件上传</div>
+        <div class="form-group">
+          <div class="upload-zone" id="attachZone" onclick="document.getElementById('attachInput').click()">
+            <div class="upload-icon">&#128206;</div>
+            <div class="upload-text">点击上传附件（可选）</div>
+            <div class="upload-preview" id="attachPreview"></div>
+          </div>
+          <input type="file" id="attachInput" accept="image/*,.pdf" style="display:none" onchange="handleAttach(this)">
+        </div>
+      </div>
+
+      <!-- 5. 费控映射（折叠，自动填充） -->
+      <details class="form-section collapsible">
+        <summary class="form-section-title">
+          <span class="collapse-caret">&#9656;</span>
+          费控映射 <span class="auto-fill-badge">自动填充</span>
+        </summary>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label auto-fill-label">费控单据类型</label>
@@ -88,79 +171,14 @@
             <input class="form-input auto-filled" id="s_fk_cash" readonly placeholder="-">
           </div>
         </div>
-      </div>
+      </details>
 
-      <!-- 3. 发票信息 -->
-      <div class="form-section">
-        <div class="form-section-title">发票信息</div>
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">发票<span class="required">*</span></label>
-          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-            <div class="upload-icon">&#128206;</div>
-            <div class="upload-text">点击或拖拽上传发票（JPG/PNG/PDF，最大 5MB）</div>
-            <div class="upload-preview" id="uploadPreview"></div>
-          </div>
-          <input type="file" id="fileInput" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this)">
-        </div>
-        <div id="ocrResult" class="ocr-result" style="display:none">
-          <b>OCR 识别结果:</b> <span id="ocrText"></span>
-        </div>
-        <div class="form-row" style="margin-top:12px">
-          <div class="form-group">
-            <label class="form-label">发票类型</label>
-            <select class="form-select" id="s_invoiceType">
-              <option value="">待识别</option>
-              <option>电子发票（增值税专用发票）</option>
-              <option>电子发票（增值税普通发票）</option>
-              <option>增值税专用发票</option>
-              <option>增值税普通发票</option>
-              <option>其他</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">税率</label>
-            <input class="form-input" id="s_taxRate" placeholder="如 0.06">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">单价</label>
-            <input class="form-input" type="number" step="0.01" id="s_amount" placeholder="金额（元）">
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. 费用信息 -->
-      <div class="form-section">
-        <div class="form-section-title">费用信息</div>
-        <div class="form-row single">
-          <div class="form-group">
-            <label class="form-label">事由描述<span class="required">*</span></label>
-            <textarea class="form-textarea" id="s_reason" placeholder="申请报销XX年XX月XX日费用 到 XX年XX月XX日费用"></textarea>
-            <div class="form-hint">示例：申请报销2026年1月1日房租费用 到 2026年3月31日房租费用，含物业附加费</div>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">受益日期从 <span class="auto-fill-badge">自动解析</span></label>
-            <input class="form-input" type="date" id="s_benefitFrom">
-          </div>
-          <div class="form-group">
-            <label class="form-label">受益日期到 <span class="auto-fill-badge">自动解析</span></label>
-            <input class="form-input" type="date" id="s_benefitTo">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">费用承担期间</label>
-            <input class="form-input" type="date" id="s_period">
-          </div>
-        </div>
-      </div>
-
-      <!-- 5. 其他设置 -->
-      <div class="form-section">
-        <div class="form-section-title">其他设置</div>
+      <!-- 6. 其他设置（折叠） -->
+      <details class="form-section collapsible" style="border-bottom:none">
+        <summary class="form-section-title">
+          <span class="collapse-caret">&#9656;</span>
+          其他设置
+        </summary>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">是否预提</label>
@@ -187,20 +205,7 @@
             <select class="form-select" id="s_payMethod"><option selected>CBS网银</option><option>其他</option></select>
           </div>
         </div>
-      </div>
-
-      <!-- 6. 附件 -->
-      <div class="form-section" style="border-bottom:none">
-        <div class="form-section-title">附件上传</div>
-        <div class="form-group">
-          <div class="upload-zone" id="attachZone" onclick="document.getElementById('attachInput').click()">
-            <div class="upload-icon">&#128206;</div>
-            <div class="upload-text">点击上传附件（可选）</div>
-            <div class="upload-preview" id="attachPreview"></div>
-          </div>
-          <input type="file" id="attachInput" accept="image/*,.pdf" style="display:none" onchange="handleAttach(this)">
-        </div>
-      </div>
+      </details>
 
       <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:16px;border-top:1px solid var(--border)">
         <button class="btn btn-ghost" onclick="location.href='home.html'">取消</button>
@@ -216,8 +221,8 @@
 
     let configRecords = [];
     let selectedConfigId = '';
-    let invoiceBase64 = '';
-    let attachBase64 = '';
+    let invoiceFile = null;     // 原始发票 File，提交时上传 Teable 附件
+    let attachFile = null;      // 原始附件 File
     let ocrRawResult = '';
 
     // 默认费用承担期间 = 今天
@@ -344,39 +349,24 @@
       if (input.files[0]) processInvoice(input.files[0]);
     }
 
-    async function pdfFirstPageToImage(file) {
-      if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js 未加载');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-      const buf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 2 });
-      const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      return canvas.toDataURL('image/png');
-    }
-
     function processInvoice(file) {
       if (file.size > 5 * 1024 * 1024) { showToast('文件不能超过 5MB', 'error'); return; }
+      invoiceFile = file;
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const reader = new FileReader();
       reader.onload = async () => {
-        invoiceBase64 = reader.result;
+        const preview = reader.result;
         document.getElementById('uploadPreview').innerHTML = isPdf
           ? `<div style="font-size:13px;color:var(--text-secondary);padding:8px 0">${file.name} (${(file.size/1024).toFixed(0)}KB)</div>`
-          : `<img src="${invoiceBase64}">`;
+          : `<img src="${preview}">`;
 
         const ocrDiv = document.getElementById('ocrResult');
         ocrDiv.style.display = 'block';
         ocrDiv.className = 'ocr-result ocr-loading';
-        document.getElementById('ocrText').textContent = isPdf ? '正在解析 PDF...' : '正在识别发票...';
+        document.getElementById('ocrText').textContent = '正在识别发票...';
 
         try {
-          const imageForAI = isPdf ? await pdfFirstPageToImage(file) : invoiceBase64;
-          if (isPdf) document.getElementById('ocrText').textContent = '正在识别发票...';
-          const result = await ocrVatInvoice(imageForAI);
+          const result = await ocrVatInvoice(file);
           applyOcrResult(result);
         } catch (e) {
           ocrDiv.className = 'ocr-result';
@@ -467,11 +457,12 @@
 
     function processAttach(file) {
       if (file.size > 5 * 1024 * 1024) { showToast('附件不能超过 5MB', 'error'); return; }
+      attachFile = file;
       const reader = new FileReader();
       reader.onload = () => {
-        attachBase64 = reader.result;
+        const preview = reader.result;
         document.getElementById('attachPreview').innerHTML = file.type.startsWith('image/')
-          ? `<img src="${attachBase64}">`
+          ? `<img src="${preview}">`
           : `<div style="font-size:13px;color:var(--text-secondary)">${file.name} (${(file.size/1024).toFixed(0)}KB)</div>`;
         showToast('附件已上传', 'info');
       };
@@ -489,13 +480,20 @@
       if (!feeType) { showToast('请选择费用类型', 'error'); return; }
       if (!sceneId) { showToast('请选择场景说明', 'error'); return; }
       if (!reason) { showToast('请填写事由描述', 'error'); return; }
-      if (!invoiceBase64) { showToast('请上传发票', 'error'); return; }
+      if (!invoiceFile) { showToast('请上传发票', 'error'); return; }
 
       const user = getCurrentUser();
       const btn = document.getElementById('submitBtn');
       btn.disabled = true; btn.textContent = '提交中...';
 
       try {
+        btn.textContent = '上传附件...';
+        const [invoiceAttachment, attachAttachment] = await Promise.all([
+          teableUploadAttachment(invoiceFile),
+          attachFile ? teableUploadAttachment(attachFile) : Promise.resolve(null),
+        ]);
+
+        btn.textContent = '提交中...';
         const ledgers = await teableGet(TABLE_LEDGER, true);
         const maxNo = ledgers.reduce((m, r) => Math.max(m, r.fields['编号'] || 0), 0);
         const ledgerNo = maxNo + 1;
@@ -538,8 +536,8 @@
           '税率': document.getElementById('s_taxRate').value,
           '受益日期从': document.getElementById('s_benefitFrom').value || null,
           '受益日期到': document.getElementById('s_benefitTo').value || null,
-          '发票图片': invoiceBase64,
-          '附件': attachBase64 || '',
+          '发票图片': [invoiceAttachment],
+          '附件': attachAttachment ? [attachAttachment] : [],
           '合同编号': document.getElementById('s_contract').value,
           '付款方式': document.getElementById('s_payMethod').value,
           '创建人': user.account,

@@ -15,7 +15,9 @@ const SSO_APP_ID    = '1876691221';
 const SSO_FC_BASE   = 'https://sso-bacend-xzfk-tayrqiioai.cn-hangzhou.fcapp.run';
 const SSO_LOGIN_URL = `https://sso.100tal.com/portal/login/${SSO_APP_ID}`;
 
-// ─── AI 发票识别（通过 FC 后端代理调用 GLM-5V）────────────────────
+// ─── AI 发票识别（前端直连 PaddleOCR）────────────────────────────
+const PADDLE_OCR_URL   = 'https://c2maw7jdm04fy5a2.aistudio-app.com/ocr';
+const PADDLE_OCR_TOKEN = 'REMOVED_PADDLEOCR_TOKEN';
 
 const HEADERS = {
   Authorization: `Bearer ${TEABLE_TOKEN}`,
@@ -115,6 +117,31 @@ async function teableDelete(tableId, id) {
   });
   if (!res.ok) throw new Error('删除失败');
   cacheClear(tableId);
+}
+
+// ─── Teable 附件上传 ────────────────────────────────────────────
+// 上传 File/Blob 到 Teable 附件存储，返回可直接写入 attachment 字段的对象
+async function teableUploadAttachment(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${TEABLE_BASE}/api/attachments/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${TEABLE_TOKEN}` },
+    body: fd,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`附件上传失败 ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const token = data.token || data.data?.token;
+  if (!token) throw new Error('附件上传响应缺少 token');
+  return {
+    token,
+    name: file.name || 'file',
+    size: file.size,
+    mimetype: file.type || data.mimetype || data.data?.mimetype || '',
+  };
 }
 
 // ─── 场景配置表读取 ─────────────────────────────────────────────
@@ -248,20 +275,77 @@ async function handleSSOCallback(ssoToken) {
   window.location.href = 'home.html';
 }
 
-// ─── 阿里云 OCR 发票识别 ────────────────────────────────────────
-async function ocrVatInvoice(base64Image) {
-  const jwt = localStorage.getItem('sso_jwt');
-  if (!jwt) throw new Error('未登录，请先用 SSO 登录');
-  const res = await fetch(`${SSO_FC_BASE}/ocr`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64: base64Image, jwt }),
+// ─── PaddleOCR 发票识别 ────────────────────────────────────────
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('读取文件失败'));
+    r.readAsDataURL(file);
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '识别失败');
+}
+
+async function ocrVatInvoice(file) {
+  if (!(file instanceof File) && !(file instanceof Blob)) {
+    throw new Error('参数必须是 File 对象');
   }
-  return await res.json();
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  const base64 = await _fileToBase64(file);
+  const res = await fetch(PADDLE_OCR_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `token ${PADDLE_OCR_TOKEN}`,
+    },
+    body: JSON.stringify({ file: base64, fileType: isPdf ? 0 : 1 }),
+  });
+  if (!res.ok) throw new Error(`OCR HTTP ${res.status}`);
+  const data = await res.json();
+  const texts = data?.result?.ocrResults?.[0]?.prunedResult?.rec_texts || [];
+  if (!texts.length) throw new Error('OCR 未识别到文字');
+  const parsed = parseInvoiceTexts(texts);
+  parsed._rawTexts = texts;
+  return parsed;
+}
+
+function parseInvoiceTexts(texts) {
+  const lines = texts.map(s => String(s || '').trim()).filter(Boolean);
+  const joined = lines.join(' ');
+
+  let invoiceType = '';
+  const t = lines.filter(l => /电子发票|增值税|专用发票|普通发票/.test(l))
+    .join('').replace(/[\s（）()]/g, '');
+  if (/电子发票/.test(t) && /专用发票/.test(t)) invoiceType = '增值税电子专用发票';
+  else if (/电子发票/.test(t) && /普通发票/.test(t)) invoiceType = '增值税电子普通发票';
+  else if (/专用发票/.test(t)) invoiceType = '增值税专用发票';
+  else if (/普通发票/.test(t)) invoiceType = '增值税普通发票';
+
+  let totalAmount = '';
+  const small = joined.match(/[(（]\s*小写\s*[)）]\s*[￥¥]?\s*([0-9]+(?:\.[0-9]+)?)/);
+  if (small) {
+    totalAmount = small[1];
+  } else {
+    const nums = [...joined.matchAll(/[￥¥]\s*([0-9]+(?:\.[0-9]+)?)/g)].map(m => parseFloat(m[1]));
+    if (nums.length) totalAmount = String(Math.max(...nums));
+  }
+
+  let taxRate = '';
+  const rate = joined.match(/([0-9]+(?:\.[0-9]+)?)\s*%/);
+  if (rate) taxRate = (parseFloat(rate[1]) / 100).toFixed(2);
+
+  const findNameAfter = (anchorRe) => {
+    const idx = lines.findIndex(l => anchorRe.test(l));
+    if (idx < 0) return '';
+    for (let i = idx + 1; i < Math.min(idx + 8, lines.length); i++) {
+      const m = lines[i].match(/名\s*称\s*[：:]\s*(.+)/);
+      if (m) return m[1].trim();
+    }
+    return '';
+  };
+  const sellerName    = findNameAfter(/销售方信息|销\s*售\s*方/);
+  const purchaserName = findNameAfter(/购买方信息|购\s*买\s*方/);
+
+  return { invoiceType, totalAmount, taxRate, sellerName, purchaserName };
 }
 
 // ─── 事由描述日期解析 ───────────────────────────────────────────
