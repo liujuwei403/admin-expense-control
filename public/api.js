@@ -275,7 +275,7 @@ async function handleSSOCallback(ssoToken) {
   window.location.href = 'home.html';
 }
 
-// ─── PaddleOCR 发票识别 ────────────────────────────────────────
+// ─── PaddleOCR 发票识别（经 FC 后端代理，解决 CORS）──────────────
 function _fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -289,23 +289,20 @@ async function ocrVatInvoice(file) {
   if (!(file instanceof File) && !(file instanceof Blob)) {
     throw new Error('参数必须是 File 对象');
   }
+  const jwt = localStorage.getItem('sso_jwt');
+  if (!jwt) throw new Error('未登录，请先用 SSO 登录');
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
-  const base64 = await _fileToBase64(file);
-  const res = await fetch(PADDLE_OCR_URL, {
+  const fileBase64 = await _fileToBase64(file);
+  const res = await fetch(`${SSO_FC_BASE}/ocr`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `token ${PADDLE_OCR_TOKEN}`,
-    },
-    body: JSON.stringify({ file: base64, fileType: isPdf ? 0 : 1 }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileBase64, fileType: isPdf ? 0 : 1, jwt }),
   });
-  if (!res.ok) throw new Error(`OCR HTTP ${res.status}`);
-  const data = await res.json();
-  const texts = data?.result?.ocrResults?.[0]?.prunedResult?.rec_texts || [];
-  if (!texts.length) throw new Error('OCR 未识别到文字');
-  const parsed = parseInvoiceTexts(texts);
-  parsed._rawTexts = texts;
-  return parsed;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `OCR HTTP ${res.status}`);
+  }
+  return await res.json();
 }
 
 function parseInvoiceTexts(texts) {

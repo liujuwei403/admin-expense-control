@@ -2,11 +2,12 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 
-const SSO_APP_ID = process.env.SSO_APP_ID;
-const SSO_APP_KEY = process.env.SSO_APP_KEY;
-const JWT_SECRET = process.env.JWT_SECRET;
-const FRONTEND_URL = process.env.FRONTEND_URL;
-const AI_TOKEN = process.env.AI_TOKEN;
+const SSO_APP_ID       = process.env.SSO_APP_ID;
+const SSO_APP_KEY      = process.env.SSO_APP_KEY;
+const JWT_SECRET       = process.env.JWT_SECRET;
+const FRONTEND_URL     = process.env.FRONTEND_URL;
+const PADDLEOCR_TOKEN  = process.env.PADDLEOCR_TOKEN;
+const PADDLEOCR_URL    = 'https://c2maw7jdm04fy5a2.aistudio-app.com/ocr';
 
 let ticketCache = { value: null, expireAt: 0 };
 
@@ -33,18 +34,17 @@ function httpGetJson(url) {
   });
 }
 
-function httpPostJson(urlStr, token, body) {
+function callPaddleOcr(fileBase64, fileType) {
   return new Promise((resolve, reject) => {
-    const u = new URL(urlStr);
-    const lib = u.protocol === 'https:' ? https : http;
-    const payload = JSON.stringify(body);
-    const req = lib.request({
+    const payload = JSON.stringify({ file: fileBase64, fileType });
+    const u = new URL(PADDLEOCR_URL);
+    const req = https.request({
       hostname: u.hostname,
-      port: u.port || (u.protocol === 'https:' ? 443 : 80),
-      path: u.pathname + u.search,
+      port: 443,
+      path: u.pathname,
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + token,
+        'Authorization': 'token ' + PADDLEOCR_TOKEN,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
       },
@@ -60,6 +60,50 @@ function httpPostJson(urlStr, token, body) {
     req.write(payload);
     req.end();
   });
+}
+
+function parseInvoiceTexts(texts) {
+  const lines = texts.map(s => String(s || '').trim()).filter(Boolean);
+  const joined = lines.join(' ');
+
+  let invoiceType = '';
+  const t = lines.filter(l => /电子发票|增值税|专用发票|普通发票/.test(l))
+    .join('').replace(/[\s（）()]/g, '');
+  if (/电子发票/.test(t) && /专用发票/.test(t)) invoiceType = '增值税电子专用发票';
+  else if (/电子发票/.test(t) && /普通发票/.test(t)) invoiceType = '增值税电子普通发票';
+  else if (/专用发票/.test(t)) invoiceType = '增值税专用发票';
+  else if (/普通发票/.test(t)) invoiceType = '增值税普通发票';
+
+  let totalAmount = '';
+  const small = joined.match(/[(（]\s*小写\s*[)）]\s*[￥¥]?\s*([0-9]+(?:\.[0-9]+)?)/);
+  if (small) {
+    totalAmount = small[1];
+  } else {
+    const nums = [...joined.matchAll(/[￥¥]\s*([0-9]+(?:\.[0-9]+)?)/g)].map(m => parseFloat(m[1]));
+    if (nums.length) totalAmount = String(Math.max(...nums));
+  }
+
+  let taxRate = '';
+  const rate = joined.match(/([0-9]+(?:\.[0-9]+)?)\s*%/);
+  if (rate) taxRate = (parseFloat(rate[1]) / 100).toFixed(2);
+
+  const findNameAfter = (anchorRe) => {
+    const idx = lines.findIndex(l => anchorRe.test(l));
+    if (idx < 0) return '';
+    for (let i = idx + 1; i < Math.min(idx + 8, lines.length); i++) {
+      const m = lines[i].match(/名\s*称\s*[：:]\s*(.+)/);
+      if (m) return m[1].trim();
+    }
+    return '';
+  };
+
+  return {
+    invoiceType,
+    totalAmount,
+    taxRate,
+    sellerName:    findNameAfter(/销售方信息|销\s*售\s*方/),
+    purchaserName: findNameAfter(/购买方信息|购\s*买\s*方/),
+  };
 }
 
 function signJWT(payload) {
@@ -92,41 +136,6 @@ function readBody(req) {
     req.on('end', () => resolve(data));
     req.on('error', reject);
   });
-}
-
-const OCR_PROMPT = `你是一名发票识别专家。请识别下面这张发票图片，严格按以下JSON格式返回结果，不要有任何其他文字或 markdown 代码块：
-{"invoiceType":"发票类型","totalAmount":价税合计金额数字,"taxRate":税率小数,"sellerName":"销售方名称","purchaserName":"购买方名称"}
-
-要求：
-- invoiceType 取值范围：增值税专用发票 / 增值税普通发票 / 电子发票（增值税专用发票）/ 电子发票（增值税普通发票）/ 其他
-- totalAmount 为纯数字（价税合计），识别不到填 0
-- taxRate 为小数（如 0.06、0.13），有多个税率取最大值，识别不到填 0
-- sellerName 和 purchaserName 为字符串，识别不到填 ""`;
-
-async function ocrInvoice(imageBase64) {
-  if (!AI_TOKEN) throw new Error('AI_TOKEN 未配置');
-  const { status, body } = await httpPostJson(
-    'http://ai-service.tal.com/openai-compatible/v1/chat/completions',
-    AI_TOKEN,
-    {
-      model: 'glm-5v-turbo',
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'text', text: OCR_PROMPT },
-          { type: 'image_url', image_url: { url: imageBase64 } },
-        ],
-      }],
-      temperature: 0.1,
-      max_tokens: 1024,
-    }
-  );
-  if (status !== 200) throw new Error('AI返回异常: ' + JSON.stringify(body).slice(0, 200));
-  let content = body.choices?.[0]?.message?.content || '';
-  content = content.replace(/```json\s*|\s*```/g, '').trim();
-  const match = content.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('AI返回非JSON: ' + content.slice(0, 200));
-  return JSON.parse(match[0]);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -176,25 +185,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // OCR 代理：POST /ocr  body: { imageBase64, jwt }
-  // DEPRECATED 2026-04-21: 前端已直连 PaddleOCR，此路由保留仅用于紧急回滚，确认稳定后删除
+  // OCR 代理：POST /ocr  body: { fileBase64, fileType, jwt }
   if (url.pathname === '/ocr' && req.method === 'POST') {
     try {
       const raw = await readBody(req);
-      const { imageBase64, jwt } = JSON.parse(raw);
+      const { fileBase64, fileType, jwt } = JSON.parse(raw);
       if (!jwt || !verifyJWT(jwt)) {
         res.writeHead(401);
         res.end(JSON.stringify({ error: 'unauthorized' }));
         return;
       }
-      if (!imageBase64) {
+      if (!fileBase64) {
         res.writeHead(400);
-        res.end(JSON.stringify({ error: 'missing imageBase64' }));
+        res.end(JSON.stringify({ error: 'missing fileBase64' }));
         return;
       }
-      const data = await ocrInvoice(imageBase64);
+      if (!PADDLEOCR_TOKEN) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'PADDLEOCR_TOKEN 未配置' }));
+        return;
+      }
+      const { status, body } = await callPaddleOcr(fileBase64, fileType ?? 1);
+      if (status !== 200) throw new Error('PaddleOCR 返回异常: ' + JSON.stringify(body).slice(0, 200));
+      const texts = body?.result?.ocrResults?.[0]?.prunedResult?.rec_texts || [];
+      if (!texts.length) throw new Error('OCR 未识别到文字');
+      const parsed = parseInvoiceTexts(texts);
       res.writeHead(200);
-      res.end(JSON.stringify(data));
+      res.end(JSON.stringify(parsed));
     } catch (e) {
       res.writeHead(500);
       res.end(JSON.stringify({ error: e.message }));
