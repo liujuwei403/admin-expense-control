@@ -119,29 +119,38 @@ async function teableDelete(tableId, id) {
   cacheClear(tableId);
 }
 
-// ─── Teable 附件上传 ────────────────────────────────────────────
-// 上传 File/Blob 到 Teable 附件存储，返回可直接写入 attachment 字段的对象
+// ─── Teable 附件上传（三步：签名 → PUT COS → notify）──────────────
 async function teableUploadAttachment(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  const res = await fetch(`${TEABLE_BASE}/api/attachments/upload`, {
+  const contentType = file.type || 'application/octet-stream';
+
+  // 1. 获取预签名 URL
+  const sigRes = await fetch(`${TEABLE_BASE}/api/attachments/signature`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${TEABLE_TOKEN}` },
-    body: fd,
+    headers: { Authorization: `Bearer ${TEABLE_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 2, contentType, contentLength: file.size }),
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`附件上传失败 ${res.status}: ${text.slice(0, 200)}`);
+  if (!sigRes.ok) {
+    const text = await sigRes.text().catch(() => '');
+    throw new Error(`获取上传签名失败 ${sigRes.status}: ${text.slice(0, 200)}`);
   }
-  const data = await res.json();
-  const token = data.token || data.data?.token;
-  if (!token) throw new Error('附件上传响应缺少 token');
-  return {
-    token,
-    name: file.name || 'file',
-    size: file.size,
-    mimetype: file.type || data.mimetype || data.data?.mimetype || '',
-  };
+  const { url, token } = await sigRes.json();
+
+  // 2. PUT 文件到腾讯云 COS（浏览器自动携带 Content-Length）
+  const putRes = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType },
+    body: file,
+  });
+  if (!putRes.ok) throw new Error(`上传文件失败 ${putRes.status}`);
+
+  // 3. 通知 Teable 完成上传
+  await fetch(`${TEABLE_BASE}/api/attachments/notify/${token}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${TEABLE_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: file.name || 'file' }),
+  }).catch(() => {});
+
+  return { token, name: file.name || 'file', size: file.size, mimetype: contentType };
 }
 
 // ─── 场景配置表读取 ─────────────────────────────────────────────
