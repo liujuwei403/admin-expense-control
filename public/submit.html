@@ -18,25 +18,17 @@
         <div id="noPermissionHint" style="display:none;padding:10px 14px;background:#fff4e5;border:1px solid #ffb020;border-radius:6px;color:#7a4a00;font-size:13px;margin-bottom:10px">
           您当前工号未关联任何场景（负责人或跟进人），暂无提报权限。如需权限请联系管理员。
         </div>
-        <div class="form-row">
+        <div class="form-row single">
           <div class="form-group">
             <label class="form-label">费用类型<span class="required">*</span></label>
             <select class="form-select" id="s_type" disabled>
               <option value="">加载中...</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">场景说明<span class="required">*</span></label>
-            <div class="multi-select-wrap" id="sceneMultiWrap">
-              <div class="multi-select-box disabled" id="sceneMultiBox" onclick="toggleSceneDropdown()">
-                <div class="multi-select-tags" id="sceneTagsContainer">
-                  <span class="multi-select-placeholder">请先选择费用类型</span>
-                </div>
-                <span class="multi-select-caret">▾</span>
-              </div>
-              <div class="multi-select-dropdown" id="sceneDropdown" style="display:none"></div>
-            </div>
-          </div>
+        </div>
+        <div id="sceneOptionsWrap" style="display:none">
+          <div class="form-label" style="margin-bottom:8px">场景说明<span class="required">*</span></div>
+          <div class="scene-options" id="sceneOptions"></div>
         </div>
       </div>
 
@@ -94,7 +86,7 @@
     let invoiceFiles = {};   // sceneId → File
     let attachFiles = {};    // sceneId → File
     let ocrRawResults = {};  // sceneId → string
-    const debouncedReason = {};
+    const debouncedLLM = {};
 
     // ─── 工具 ────────────────────────────────────────────────────
     function getSceneSid(id) {
@@ -123,7 +115,6 @@
     function showNoPermissionHint() {
       document.getElementById('noPermissionHint').style.display = 'block';
       document.getElementById('s_type').disabled = true;
-      document.getElementById('sceneMultiBox').classList.add('disabled');
     }
 
     (async () => {
@@ -155,12 +146,10 @@
       sel.disabled = false;
     }
 
-    // ─── 费用类型 change → 清空场景 ────────────────────────────────
+    // ─── 费用类型 change → 清空场景 & 渲染 pills ──────────────────
     document.getElementById('s_type').addEventListener('change', function() {
-      // 清空所有已选场景
       [...selectedSceneIds].forEach(id => {
-        const sid = getSceneSid(id);
-        const block = document.getElementById('scene-block-' + sid);
+        const block = document.getElementById('scene-block-' + getSceneSid(id));
         if (block) block.remove();
       });
       selectedSceneIds = [];
@@ -168,54 +157,31 @@
       attachFiles = {};
       ocrRawResults = {};
 
-      const box = document.getElementById('sceneMultiBox');
+      const wrap = document.getElementById('sceneOptionsWrap');
       if (this.value) {
-        box.classList.remove('disabled');
+        wrap.style.display = 'block';
+        renderSceneOptions();
       } else {
-        box.classList.add('disabled');
-        document.getElementById('sceneDropdown').style.display = 'none';
-        box.classList.remove('open');
-      }
-      renderSceneTags();
-    });
-
-    // ─── 多选下拉 ────────────────────────────────────────────────
-    function toggleSceneDropdown() {
-      const box = document.getElementById('sceneMultiBox');
-      if (box.classList.contains('disabled')) return;
-      const dropdown = document.getElementById('sceneDropdown');
-      const isOpen = dropdown.style.display !== 'none';
-      if (!isOpen) renderSceneDropdown();
-      dropdown.style.display = isOpen ? 'none' : 'block';
-      box.classList.toggle('open', !isOpen);
-    }
-
-    document.addEventListener('click', function(e) {
-      const wrap = document.getElementById('sceneMultiWrap');
-      if (wrap && !wrap.contains(e.target)) {
-        document.getElementById('sceneDropdown').style.display = 'none';
-        document.getElementById('sceneMultiBox').classList.remove('open');
+        wrap.style.display = 'none';
+        document.getElementById('sceneOptions').innerHTML = '';
       }
     });
 
-    function renderSceneDropdown() {
+    function renderSceneOptions() {
       const feeType = document.getElementById('s_type').value;
-      const dropdown = document.getElementById('sceneDropdown');
-      if (!feeType) {
-        dropdown.innerHTML = '<div class="multi-select-disabled">请先选择费用类型</div>';
-        return;
-      }
+      const container = document.getElementById('sceneOptions');
       const filtered = configRecords.filter(r => r.fields['费用类型'] === feeType);
       if (filtered.length === 0) {
-        dropdown.innerHTML = '<div class="multi-select-disabled">无可用场景</div>';
+        container.innerHTML = '<span style="font-size:13px;color:var(--text-muted)">无可用场景</span>';
         return;
       }
-      dropdown.innerHTML = filtered.map(r => {
-        const checked = selectedSceneIds.includes(r.id) ? 'checked' : '';
+      container.innerHTML = filtered.map(r => {
         const name = escHtml(r.fields['场景说明'] || '-');
-        return `<label class="multi-select-option">
+        const checked = selectedSceneIds.includes(r.id) ? 'checked' : '';
+        const cls = selectedSceneIds.includes(r.id) ? ' checked' : '';
+        return `<label class="scene-option-label${cls}" id="scene-opt-${getSceneSid(r.id)}">
           <input type="checkbox" value="${r.id}" ${checked} onchange="toggleScene('${r.id}', this.checked)">
-          <span>${name}</span>
+          ${name}
         </label>`;
       }).join('');
     }
@@ -230,15 +196,16 @@
       const record = configRecords.find(r => r.id === sceneId);
       if (!record) return;
       selectedSceneIds.push(sceneId);
-      renderSceneTags();
+
+      const lbl = document.getElementById('scene-opt-' + getSceneSid(sceneId));
+      if (lbl) lbl.classList.add('checked');
 
       const container = document.getElementById('sceneBlocksContainer');
       const div = document.createElement('div');
       div.innerHTML = renderSceneBlock(record);
       container.appendChild(div.firstElementChild);
 
-      const sid = getSceneSid(sceneId);
-      setupUploadZone(sceneId, sid);
+      setupUploadZone(sceneId, getSceneSid(sceneId));
     }
 
     function removeScene(sceneId) {
@@ -253,26 +220,10 @@
       delete invoiceFiles[sceneId];
       delete attachFiles[sceneId];
       delete ocrRawResults[sceneId];
-      delete debouncedReason[sid];
+      delete debouncedLLM[sid];
 
-      // 同步取消 dropdown 里的勾
-      const cb = document.querySelector(`#sceneDropdown input[value="${sceneId}"]`);
-      if (cb) cb.checked = false;
-
-      renderSceneTags();
-    }
-
-    function renderSceneTags() {
-      const container = document.getElementById('sceneTagsContainer');
-      if (selectedSceneIds.length === 0) {
-        container.innerHTML = '<span class="multi-select-placeholder">请选择场景（可多选）</span>';
-        return;
-      }
-      container.innerHTML = selectedSceneIds.map(id => {
-        const record = configRecords.find(r => r.id === id);
-        const name = escHtml(record ? (record.fields['场景说明'] || '-') : id);
-        return `<span class="multi-select-tag">${name}<span class="multi-select-tag-remove" onclick="event.stopPropagation();removeScene('${id}')">✕</span></span>`;
-      }).join('');
+      const lbl = document.getElementById('scene-opt-' + sid);
+      if (lbl) { lbl.classList.remove('checked'); lbl.querySelector('input').checked = false; }
     }
 
     // ─── 渲染单个场景块 ──────────────────────────────────────────
@@ -448,16 +399,44 @@
 </div>`;
     }
 
-    // ─── 事由描述 → 日期自动解析（每块独立 debounce） ────────────
+    // ─── 事由描述 → LLM 解析日期 ────────────────────────────────
     function handleReasonInput(el, sid) {
-      if (!debouncedReason[sid]) {
-        debouncedReason[sid] = debounce(function(val) {
-          const dates = parseBenefitDates(val);
-          if (dates.from) document.getElementById('s_benefitFrom-' + sid).value = dates.from;
-          if (dates.to)   document.getElementById('s_benefitTo-' + sid).value   = dates.to;
-        }, 500);
+      if (!debouncedLLM[sid]) {
+        debouncedLLM[sid] = debounce(function(val) {
+          if (!val.trim()) return;
+          parseDatesWithLLM(val, sid);
+        }, 800);
       }
-      debouncedReason[sid](el.value);
+      debouncedLLM[sid](el.value);
+    }
+
+    async function parseDatesWithLLM(text, sid) {
+      try {
+        const resp = await fetch('http://ai-service.tal.com/openai-compatible/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer 300000485:61b228c575d42cbd37a266636c5b7364',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'glm-4.6v',
+            messages: [{
+              role: 'user',
+              content: `从以下费用事由描述中提取受益日期范围（起始日和截止日），只返回JSON，格式：{"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}，无法识别的字段返回null，不要输出任何其他内容。\n事由：${text}`
+            }]
+          })
+        });
+        const data = await resp.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        const match = content.match(/\{[\s\S]*?\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          if (parsed.from) document.getElementById('s_benefitFrom-' + sid).value = parsed.from;
+          if (parsed.to)   document.getElementById('s_benefitTo-' + sid).value   = parsed.to;
+        }
+      } catch (_) {
+        // 网络或解析失败时静默忽略
+      }
     }
 
     // ─── 拖拽绑定 ────────────────────────────────────────────────
