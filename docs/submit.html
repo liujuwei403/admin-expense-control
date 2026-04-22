@@ -27,153 +27,23 @@
           </div>
           <div class="form-group">
             <label class="form-label">场景说明<span class="required">*</span></label>
-            <select class="form-select" id="s_scene" disabled>
-              <option value="">请先选择费用类型</option>
-            </select>
+            <div class="multi-select-wrap" id="sceneMultiWrap">
+              <div class="multi-select-box disabled" id="sceneMultiBox" onclick="toggleSceneDropdown()">
+                <div class="multi-select-tags" id="sceneTagsContainer">
+                  <span class="multi-select-placeholder">请先选择费用类型</span>
+                </div>
+                <span class="multi-select-caret">▾</span>
+              </div>
+              <div class="multi-select-dropdown" id="sceneDropdown" style="display:none"></div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 2. 发票信息 -->
-      <div class="form-section">
-        <div class="form-section-title">发票信息</div>
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">发票<span class="required">*</span></label>
-          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-            <div class="upload-icon">&#128206;</div>
-            <div class="upload-text">点击或拖拽上传发票（JPG/PNG/PDF，最大 5MB）</div>
-            <div class="upload-preview" id="uploadPreview"></div>
-          </div>
-          <input type="file" id="fileInput" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this)">
-        </div>
-        <div id="ocrResult" class="ocr-result" style="display:none">
-          <b>OCR 识别结果:</b> <span id="ocrText"></span>
-        </div>
-        <div class="form-row" style="margin-top:12px">
-          <div class="form-group">
-            <label class="form-label">发票类型</label>
-            <select class="form-select" id="s_invoiceType">
-              <option value="">待识别</option>
-              <option>电子发票（增值税专用发票）</option>
-              <option>电子发票（增值税普通发票）</option>
-              <option>增值税专用发票</option>
-              <option>增值税普通发票</option>
-              <option>其他</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">税率</label>
-            <input class="form-input" id="s_taxRate" placeholder="如 0.06">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">单价</label>
-            <input class="form-input" type="number" step="0.01" id="s_amount" placeholder="金额（元）">
-          </div>
-        </div>
-      </div>
+      <!-- 动态场景表单块容器 -->
+      <div class="scene-blocks-container" id="sceneBlocksContainer"></div>
 
-      <!-- 3. 费用信息 -->
-      <div class="form-section">
-        <div class="form-section-title">费用信息</div>
-        <div class="form-row single">
-          <div class="form-group">
-            <label class="form-label">事由描述<span class="required">*</span></label>
-            <textarea class="form-textarea" id="s_reason" placeholder="申请报销XX年XX月XX日费用 到 XX年XX月XX日费用"></textarea>
-            <div class="form-hint">示例：申请报销2026年1月1日房租费用 到 2026年3月31日房租费用，含物业附加费</div>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">受益日期从 <span class="auto-fill-badge">自动解析</span></label>
-            <input class="form-input" type="date" id="s_benefitFrom">
-          </div>
-          <div class="form-group">
-            <label class="form-label">受益日期到 <span class="auto-fill-badge">自动解析</span></label>
-            <input class="form-input" type="date" id="s_benefitTo">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">费用承担期间</label>
-            <input class="form-input" type="date" id="s_period">
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. 附件上传 -->
-      <div class="form-section">
-        <div class="form-section-title">附件上传</div>
-        <div class="form-group">
-          <div class="upload-zone" id="attachZone" onclick="document.getElementById('attachInput').click()">
-            <div class="upload-icon">&#128206;</div>
-            <div class="upload-text">点击上传附件（可选）</div>
-            <div class="upload-preview" id="attachPreview"></div>
-          </div>
-          <input type="file" id="attachInput" accept="image/*,.pdf" style="display:none" onchange="handleAttach(this)">
-        </div>
-      </div>
-
-      <!-- 5. 费控映射（折叠，自动填充） -->
-      <details class="form-section collapsible">
-        <summary class="form-section-title">
-          <span class="collapse-caret">&#9656;</span>
-          费控映射 <span class="auto-fill-badge">自动填充</span>
-        </summary>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label auto-fill-label">费控单据类型</label>
-            <input class="form-input auto-filled" id="s_fk_docType" readonly placeholder="-">
-          </div>
-          <div class="form-group">
-            <label class="form-label auto-fill-label">法律主体</label>
-            <input class="form-input auto-filled" id="s_legal" readonly placeholder="-">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label auto-fill-label">供应商/收款方</label>
-            <input class="form-input auto-filled" id="s_supplier" readonly placeholder="-">
-          </div>
-          <div class="form-group">
-            <label class="form-label auto-fill-label">合同编号</label>
-            <input class="form-input auto-filled" id="s_contract" readonly placeholder="-">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label auto-fill-label">费控费用类型</label>
-            <input class="form-input auto-filled" id="s_fk_feeType" readonly placeholder="-">
-          </div>
-          <div class="form-group">
-            <label class="form-label auto-fill-label">费控费用项目</label>
-            <input class="form-input auto-filled" id="s_fk_feeItem" readonly placeholder="-">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label auto-fill-label">是否关联项目/专项/战斗单元</label>
-            <input class="form-input auto-filled" id="s_linkProject" readonly placeholder="-">
-          </div>
-          <div class="form-group">
-            <label class="form-label auto-fill-label">费控战斗单元</label>
-            <input class="form-input auto-filled" id="s_fk_unit" readonly placeholder="-">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label auto-fill-label">费控分摊部门</label>
-            <input class="form-input auto-filled" id="s_fk_dept" readonly placeholder="-">
-          </div>
-          <div class="form-group">
-            <label class="form-label auto-fill-label">费控现金事务</label>
-            <input class="form-input auto-filled" id="s_fk_cash" readonly placeholder="-">
-          </div>
-        </div>
-      </details>
-
-      <!-- 6. 其他设置（折叠） -->
+      <!-- 2. 其他设置（共享，折叠） -->
       <details class="form-section collapsible" style="border-bottom:none">
         <summary class="form-section-title">
           <span class="collapse-caret">&#9656;</span>
@@ -220,15 +90,22 @@
     renderNav('submit.html');
 
     let configRecords = [];
-    let selectedConfigId = '';
-    let invoiceFile = null;     // 原始发票 File，提交时上传 Teable 附件
-    let attachFile = null;      // 原始附件 File
-    let ocrRawResult = '';
+    let selectedSceneIds = [];
+    let invoiceFiles = {};   // sceneId → File
+    let attachFiles = {};    // sceneId → File
+    let ocrRawResults = {};  // sceneId → string
+    const debouncedReason = {};
 
-    // 默认费用承担期间 = 今天
-    document.getElementById('s_period').valueAsDate = new Date();
+    // ─── 工具 ────────────────────────────────────────────────────
+    function getSceneSid(id) {
+      return id.replace(/[^a-z0-9]/gi, '_');
+    }
 
-    // ─── 加载配置数据 & 填充费用类型 ───────────────────────────
+    function escHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ─── 加载配置数据 & 填充费用类型 ───────────────────────────────
     function extractWorkcode(title) {
       if (!title) return '';
       const idx = title.lastIndexOf('-');
@@ -246,6 +123,7 @@
     function showNoPermissionHint() {
       document.getElementById('noPermissionHint').style.display = 'block';
       document.getElementById('s_type').disabled = true;
+      document.getElementById('sceneMultiBox').classList.add('disabled');
     }
 
     (async () => {
@@ -277,115 +155,371 @@
       sel.disabled = false;
     }
 
-    // ─── 级联：费用类型 → 场景说明 ──────────────────────────────
+    // ─── 费用类型 change → 清空场景 ────────────────────────────────
     document.getElementById('s_type').addEventListener('change', function() {
-      const selectedType = this.value;
-      const sceneSel = document.getElementById('s_scene');
+      // 清空所有已选场景
+      [...selectedSceneIds].forEach(id => {
+        const sid = getSceneSid(id);
+        const block = document.getElementById('scene-block-' + sid);
+        if (block) block.remove();
+      });
+      selectedSceneIds = [];
+      invoiceFiles = {};
+      attachFiles = {};
+      ocrRawResults = {};
 
-      if (!selectedType) {
-        sceneSel.innerHTML = '<option value="">请先选择费用类型</option>';
-        sceneSel.disabled = true;
-        clearAutoFields();
+      const box = document.getElementById('sceneMultiBox');
+      if (this.value) {
+        box.classList.remove('disabled');
+      } else {
+        box.classList.add('disabled');
+        document.getElementById('sceneDropdown').style.display = 'none';
+        box.classList.remove('open');
+      }
+      renderSceneTags();
+    });
+
+    // ─── 多选下拉 ────────────────────────────────────────────────
+    function toggleSceneDropdown() {
+      const box = document.getElementById('sceneMultiBox');
+      if (box.classList.contains('disabled')) return;
+      const dropdown = document.getElementById('sceneDropdown');
+      const isOpen = dropdown.style.display !== 'none';
+      if (!isOpen) renderSceneDropdown();
+      dropdown.style.display = isOpen ? 'none' : 'block';
+      box.classList.toggle('open', !isOpen);
+    }
+
+    document.addEventListener('click', function(e) {
+      const wrap = document.getElementById('sceneMultiWrap');
+      if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('sceneDropdown').style.display = 'none';
+        document.getElementById('sceneMultiBox').classList.remove('open');
+      }
+    });
+
+    function renderSceneDropdown() {
+      const feeType = document.getElementById('s_type').value;
+      const dropdown = document.getElementById('sceneDropdown');
+      if (!feeType) {
+        dropdown.innerHTML = '<div class="multi-select-disabled">请先选择费用类型</div>';
         return;
       }
+      const filtered = configRecords.filter(r => r.fields['费用类型'] === feeType);
+      if (filtered.length === 0) {
+        dropdown.innerHTML = '<div class="multi-select-disabled">无可用场景</div>';
+        return;
+      }
+      dropdown.innerHTML = filtered.map(r => {
+        const checked = selectedSceneIds.includes(r.id) ? 'checked' : '';
+        const name = escHtml(r.fields['场景说明'] || '-');
+        return `<label class="multi-select-option">
+          <input type="checkbox" value="${r.id}" ${checked} onchange="toggleScene('${r.id}', this.checked)">
+          <span>${name}</span>
+        </label>`;
+      }).join('');
+    }
 
-      const filtered = configRecords.filter(r => r.fields['费用类型'] === selectedType);
-      sceneSel.innerHTML = '<option value="">请选择场景</option>' +
-        filtered.map(r => `<option value="${r.id}">${r.fields['场景说明'] || '-'}</option>`).join('');
-      sceneSel.disabled = false;
-      clearAutoFields();
-    });
+    function toggleScene(sceneId, checked) {
+      if (checked) addScene(sceneId);
+      else removeScene(sceneId);
+    }
 
-    // ─── 级联：场景说明 → 自动填充 ──────────────────────────────
-    document.getElementById('s_scene').addEventListener('change', function() {
-      const recordId = this.value;
-      if (!recordId) { clearAutoFields(); return; }
+    function addScene(sceneId) {
+      if (selectedSceneIds.includes(sceneId)) return;
+      const record = configRecords.find(r => r.id === sceneId);
+      if (!record) return;
+      selectedSceneIds.push(sceneId);
+      renderSceneTags();
 
-      const config = configRecords.find(r => r.id === recordId);
-      if (!config) return;
-      const f = config.fields;
+      const container = document.getElementById('sceneBlocksContainer');
+      const div = document.createElement('div');
+      div.innerHTML = renderSceneBlock(record);
+      container.appendChild(div.firstElementChild);
 
-      document.getElementById('s_fk_docType').value = f['费控单据类型'] || '';
-      document.getElementById('s_legal').value = f['法律主体'] || '';
-      document.getElementById('s_supplier').value = f['供应商/收款方'] || '';
-      document.getElementById('s_contract').value = f['合同编号'] || '';
-      document.getElementById('s_fk_feeType').value = f['费控费用类型'] || '';
-      document.getElementById('s_fk_feeItem').value = f['费控费用项目'] || '';
-      document.getElementById('s_fk_unit').value = f['费控战斗单元'] || '';
-      document.getElementById('s_fk_dept').value = f['费控分摊部门'] || '';
-      document.getElementById('s_fk_cash').value = f['费控现金事务'] || '';
+      const sid = getSceneSid(sceneId);
+      setupUploadZone(sceneId, sid);
+    }
 
-      const hasUnit = f['费控战斗单元'] && f['费控战斗单元'] !== '空';
-      document.getElementById('s_linkProject').value = hasUnit ? '是' : '否';
+    function removeScene(sceneId) {
+      const idx = selectedSceneIds.indexOf(sceneId);
+      if (idx < 0) return;
+      selectedSceneIds.splice(idx, 1);
 
-      selectedConfigId = recordId;
-    });
+      const sid = getSceneSid(sceneId);
+      const block = document.getElementById('scene-block-' + sid);
+      if (block) block.remove();
 
-    function clearAutoFields() {
-      ['s_fk_docType','s_legal','s_supplier','s_contract','s_fk_feeType','s_fk_feeItem',
-       's_fk_unit','s_fk_dept','s_fk_cash','s_linkProject'].forEach(id => {
-        document.getElementById(id).value = '';
+      delete invoiceFiles[sceneId];
+      delete attachFiles[sceneId];
+      delete ocrRawResults[sceneId];
+      delete debouncedReason[sid];
+
+      // 同步取消 dropdown 里的勾
+      const cb = document.querySelector(`#sceneDropdown input[value="${sceneId}"]`);
+      if (cb) cb.checked = false;
+
+      renderSceneTags();
+    }
+
+    function renderSceneTags() {
+      const container = document.getElementById('sceneTagsContainer');
+      if (selectedSceneIds.length === 0) {
+        container.innerHTML = '<span class="multi-select-placeholder">请选择场景（可多选）</span>';
+        return;
+      }
+      container.innerHTML = selectedSceneIds.map(id => {
+        const record = configRecords.find(r => r.id === id);
+        const name = escHtml(record ? (record.fields['场景说明'] || '-') : id);
+        return `<span class="multi-select-tag">${name}<span class="multi-select-tag-remove" onclick="event.stopPropagation();removeScene('${id}')">✕</span></span>`;
+      }).join('');
+    }
+
+    // ─── 渲染单个场景块 ──────────────────────────────────────────
+    function renderSceneBlock(record) {
+      const id = record.id;
+      const f = record.fields;
+      const sid = getSceneSid(id);
+      const sceneName = escHtml(f['场景说明'] || '-');
+      const today = new Date().toISOString().slice(0, 10);
+
+      const fkDocType = escHtml(f['费控单据类型'] || '');
+      const legal     = escHtml(f['法律主体'] || '');
+      const supplier  = escHtml(f['供应商/收款方'] || '');
+      const contract  = escHtml(f['合同编号'] || '');
+      const fkFeeType = escHtml(f['费控费用类型'] || '');
+      const fkFeeItem = escHtml(f['费控费用项目'] || '');
+      const fkUnit    = escHtml(f['费控战斗单元'] || '');
+      const fkDept    = escHtml(f['费控分摊部门'] || '');
+      const fkCash    = escHtml(f['费控现金事务'] || '');
+      const hasUnit   = f['费控战斗单元'] && f['费控战斗单元'] !== '空';
+      const linkProject = hasUnit ? '是' : '否';
+
+      return `
+<div class="scene-block" id="scene-block-${sid}" data-scene-id="${id}">
+  <div class="scene-block-header">
+    <span class="scene-block-title">${sceneName}</span>
+    <button class="scene-block-remove" onclick="removeScene('${id}')" title="移除此场景">✕</button>
+  </div>
+  <div class="scene-block-body">
+
+    <!-- 发票信息 -->
+    <div class="form-section">
+      <div class="form-section-title">发票信息</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">发票<span class="required">*</span></label>
+        <div class="upload-zone" id="uploadZone-${sid}" onclick="document.getElementById('fileInput-${sid}').click()">
+          <div class="upload-icon">&#128206;</div>
+          <div class="upload-text">点击或拖拽上传发票（JPG/PNG/PDF，最大 5MB）</div>
+          <div class="upload-preview" id="uploadPreview-${sid}"></div>
+        </div>
+        <input type="file" id="fileInput-${sid}" accept="image/*,.pdf" style="display:none" onchange="handleFileUpload(this,'${id}')">
+      </div>
+      <div id="ocrResult-${sid}" class="ocr-result" style="display:none">
+        <b>OCR 识别结果:</b> <span id="ocrText-${sid}"></span>
+      </div>
+      <div class="form-row" style="margin-top:12px">
+        <div class="form-group">
+          <label class="form-label">发票类型</label>
+          <select class="form-select" id="s_invoiceType-${sid}">
+            <option value="">待识别</option>
+            <option>电子发票（增值税专用发票）</option>
+            <option>电子发票（增值税普通发票）</option>
+            <option>增值税专用发票</option>
+            <option>增值税普通发票</option>
+            <option>其他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">税率</label>
+          <input class="form-input" id="s_taxRate-${sid}" placeholder="如 0.06">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">单价</label>
+          <input class="form-input" type="number" step="0.01" id="s_amount-${sid}" placeholder="金额（元）">
+        </div>
+      </div>
+    </div>
+
+    <!-- 费用信息 -->
+    <div class="form-section">
+      <div class="form-section-title">费用信息</div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label class="form-label">事由描述<span class="required">*</span></label>
+          <textarea class="form-textarea" id="s_reason-${sid}" placeholder="申请报销XX年XX月XX日费用 到 XX年XX月XX日费用" oninput="handleReasonInput(this,'${sid}')"></textarea>
+          <div class="form-hint">示例：申请报销2026年1月1日房租费用 到 2026年3月31日房租费用，含物业附加费</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">受益日期从 <span class="auto-fill-badge">自动解析</span></label>
+          <input class="form-input" type="date" id="s_benefitFrom-${sid}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">受益日期到 <span class="auto-fill-badge">自动解析</span></label>
+          <input class="form-input" type="date" id="s_benefitTo-${sid}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">费用承担期间</label>
+          <input class="form-input" type="date" id="s_period-${sid}" value="${today}">
+        </div>
+      </div>
+    </div>
+
+    <!-- 附件上传 -->
+    <div class="form-section">
+      <div class="form-section-title">附件上传</div>
+      <div class="form-group">
+        <div class="upload-zone" id="attachZone-${sid}" onclick="document.getElementById('attachInput-${sid}').click()">
+          <div class="upload-icon">&#128206;</div>
+          <div class="upload-text">点击上传附件（可选）</div>
+          <div class="upload-preview" id="attachPreview-${sid}"></div>
+        </div>
+        <input type="file" id="attachInput-${sid}" accept="image/*,.pdf" style="display:none" onchange="handleAttach(this,'${id}')">
+      </div>
+    </div>
+
+    <!-- 费控映射（折叠，自动填充） -->
+    <details class="collapsible">
+      <summary class="form-section-title">
+        <span class="collapse-caret">&#9656;</span>
+        费控映射 <span class="auto-fill-badge">自动填充</span>
+      </summary>
+      <div style="padding-top:8px">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label auto-fill-label">费控单据类型</label>
+            <input class="form-input auto-filled" id="s_fk_docType-${sid}" readonly value="${fkDocType}" placeholder="-">
+          </div>
+          <div class="form-group">
+            <label class="form-label auto-fill-label">法律主体</label>
+            <input class="form-input auto-filled" id="s_legal-${sid}" readonly value="${legal}" placeholder="-">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label auto-fill-label">供应商/收款方</label>
+            <input class="form-input auto-filled" id="s_supplier-${sid}" readonly value="${supplier}" placeholder="-">
+          </div>
+          <div class="form-group">
+            <label class="form-label auto-fill-label">合同编号</label>
+            <input class="form-input auto-filled" id="s_contract-${sid}" readonly value="${contract}" placeholder="-">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label auto-fill-label">费控费用类型</label>
+            <input class="form-input auto-filled" id="s_fk_feeType-${sid}" readonly value="${fkFeeType}" placeholder="-">
+          </div>
+          <div class="form-group">
+            <label class="form-label auto-fill-label">费控费用项目</label>
+            <input class="form-input auto-filled" id="s_fk_feeItem-${sid}" readonly value="${fkFeeItem}" placeholder="-">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label auto-fill-label">是否关联项目/专项/战斗单元</label>
+            <input class="form-input auto-filled" id="s_linkProject-${sid}" readonly value="${linkProject}" placeholder="-">
+          </div>
+          <div class="form-group">
+            <label class="form-label auto-fill-label">费控战斗单元</label>
+            <input class="form-input auto-filled" id="s_fk_unit-${sid}" readonly value="${fkUnit}" placeholder="-">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label auto-fill-label">费控分摊部门</label>
+            <input class="form-input auto-filled" id="s_fk_dept-${sid}" readonly value="${fkDept}" placeholder="-">
+          </div>
+          <div class="form-group">
+            <label class="form-label auto-fill-label">费控现金事务</label>
+            <input class="form-input auto-filled" id="s_fk_cash-${sid}" readonly value="${fkCash}" placeholder="-">
+          </div>
+        </div>
+      </div>
+    </details>
+
+  </div>
+</div>`;
+    }
+
+    // ─── 事由描述 → 日期自动解析（每块独立 debounce） ────────────
+    function handleReasonInput(el, sid) {
+      if (!debouncedReason[sid]) {
+        debouncedReason[sid] = debounce(function(val) {
+          const dates = parseBenefitDates(val);
+          if (dates.from) document.getElementById('s_benefitFrom-' + sid).value = dates.from;
+          if (dates.to)   document.getElementById('s_benefitTo-' + sid).value   = dates.to;
+        }, 500);
+      }
+      debouncedReason[sid](el.value);
+    }
+
+    // ─── 拖拽绑定 ────────────────────────────────────────────────
+    function setupUploadZone(sceneId, sid) {
+      const zone = document.getElementById('uploadZone-' + sid);
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) processInvoice(e.dataTransfer.files[0], sceneId);
       });
-      selectedConfigId = '';
+
+      const attachZone = document.getElementById('attachZone-' + sid);
+      attachZone.addEventListener('dragover', e => { e.preventDefault(); attachZone.classList.add('dragover'); });
+      attachZone.addEventListener('dragleave', () => attachZone.classList.remove('dragover'));
+      attachZone.addEventListener('drop', e => {
+        e.preventDefault(); attachZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) processAttach(e.dataTransfer.files[0], sceneId);
+      });
     }
 
-    // ─── 事由描述 → 日期自动解析 ───────────────────────────────
-    document.getElementById('s_reason').addEventListener('input', debounce(function() {
-      const dates = parseBenefitDates(this.value);
-      if (dates.from) document.getElementById('s_benefitFrom').value = dates.from;
-      if (dates.to) document.getElementById('s_benefitTo').value = dates.to;
-    }, 500));
-
-    // ─── 发票上传 + OCR ─────────────────────────────────────────
-    const uploadZone = document.getElementById('uploadZone');
-    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
-    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-    uploadZone.addEventListener('drop', e => {
-      e.preventDefault(); uploadZone.classList.remove('dragover');
-      if (e.dataTransfer.files[0]) processInvoice(e.dataTransfer.files[0]);
-    });
-
-    function handleFileUpload(input) {
-      if (input.files[0]) processInvoice(input.files[0]);
+    // ─── 发票上传 + OCR ──────────────────────────────────────────
+    function handleFileUpload(input, sceneId) {
+      if (input.files[0]) processInvoice(input.files[0], sceneId);
     }
 
-    function processInvoice(file) {
+    function processInvoice(file, sceneId) {
       if (file.size > 5 * 1024 * 1024) { showToast('文件不能超过 5MB', 'error'); return; }
-      invoiceFile = file;
+      const sid = getSceneSid(sceneId);
+      invoiceFiles[sceneId] = file;
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const reader = new FileReader();
       reader.onload = async () => {
-        const preview = reader.result;
-        document.getElementById('uploadPreview').innerHTML = isPdf
+        document.getElementById('uploadPreview-' + sid).innerHTML = isPdf
           ? `<div style="font-size:13px;color:var(--text-secondary);padding:8px 0">${file.name} (${(file.size/1024).toFixed(0)}KB)</div>`
-          : `<img src="${preview}">`;
+          : `<img src="${reader.result}">`;
 
-        const ocrDiv = document.getElementById('ocrResult');
+        const ocrDiv = document.getElementById('ocrResult-' + sid);
         ocrDiv.style.display = 'block';
         ocrDiv.className = 'ocr-result ocr-loading';
-        document.getElementById('ocrText').textContent = '正在识别发票...';
+        document.getElementById('ocrText-' + sid).textContent = '正在识别发票...';
 
         try {
           const result = await ocrVatInvoice(file);
-          applyOcrResult(result);
+          applyOcrResult(result, sceneId, sid);
         } catch (e) {
           ocrDiv.className = 'ocr-result';
-          document.getElementById('ocrText').textContent = '识别失败: ' + e.message;
+          document.getElementById('ocrText-' + sid).textContent = '识别失败: ' + e.message;
           showToast('识别失败', 'error');
         }
       };
       reader.readAsDataURL(file);
     }
 
-    function applyOcrResult(result) {
-      ocrRawResult = JSON.stringify(result);
-      const invoiceType = result.invoiceType || '';
-      const totalAmount = result.totalAmount || '';
-      const taxRate = result.taxRate || '';
-      const sellerName = result.sellerName || '';
+    function applyOcrResult(result, sceneId, sid) {
+      ocrRawResults[sceneId] = JSON.stringify(result);
+      const invoiceType  = result.invoiceType  || '';
+      const totalAmount  = result.totalAmount  || '';
+      const taxRate      = result.taxRate      || '';
+      const sellerName   = result.sellerName   || '';
       const purchaserName = result.purchaserName || '';
 
-      // 发票类型映射
       if (invoiceType) {
         const typeMap = {
           '专用发票': '增值税专用发票',
@@ -396,159 +530,166 @@
           '增值税电子普通发票': '电子发票（增值税普通发票）',
         };
         const mapped = typeMap[invoiceType] || invoiceType;
-        const sel = document.getElementById('s_invoiceType');
+        const sel = document.getElementById('s_invoiceType-' + sid);
         for (const opt of sel.options) {
-          if (opt.value === mapped || opt.textContent.includes(invoiceType)) {
-            sel.value = opt.value; break;
-          }
+          if (opt.value === mapped || opt.textContent.includes(invoiceType)) { sel.value = opt.value; break; }
         }
       }
 
       if (taxRate) {
         let rate = String(taxRate).replace('%', '').replace('％', '');
-        // 如果是整数百分比如 "6"，转为小数 "0.06"
         if (parseFloat(rate) >= 1) rate = (parseFloat(rate) / 100).toFixed(2);
-        document.getElementById('s_taxRate').value = rate;
+        document.getElementById('s_taxRate-' + sid).value = rate;
       }
 
       if (totalAmount) {
-        document.getElementById('s_amount').value = parseFloat(totalAmount) || '';
+        document.getElementById('s_amount-' + sid).value = parseFloat(totalAmount) || '';
       }
 
       if (sellerName) {
-        const cur = document.getElementById('s_supplier').value;
+        const supplierEl = document.getElementById('s_supplier-' + sid);
+        const cur = supplierEl.value;
         if (!cur) {
-          document.getElementById('s_supplier').value = sellerName;
+          supplierEl.value = sellerName;
         } else if (!cur.includes(sellerName) && !sellerName.includes(cur)) {
           if (confirm(`OCR 识别供应商"${sellerName}"与配置"${cur}"不同，是否替换？`)) {
-            document.getElementById('s_supplier').value = sellerName;
+            supplierEl.value = sellerName;
           }
         }
       }
 
       if (purchaserName) {
-        const cur = document.getElementById('s_legal').value;
+        const legalEl = document.getElementById('s_legal-' + sid);
+        const cur = legalEl.value;
         if (!cur) {
-          document.getElementById('s_legal').value = purchaserName;
+          legalEl.value = purchaserName;
         } else if (!cur.includes(purchaserName) && !purchaserName.includes(cur)) {
           showToast(`注意：OCR 购方"${purchaserName}"与配置法律主体不一致`, 'warn');
         }
       }
 
-      const ocrDiv = document.getElementById('ocrResult');
+      const ocrDiv = document.getElementById('ocrResult-' + sid);
       ocrDiv.style.display = 'block';
       ocrDiv.className = 'ocr-result';
-      document.getElementById('ocrText').textContent =
+      document.getElementById('ocrText-' + sid).textContent =
         `类型: ${invoiceType || '-'} | 金额: ${totalAmount || '-'} | 税率: ${taxRate || '-'} | 销方: ${sellerName || '-'}`;
     }
 
-    // ─── 附件上传 ───────────────────────────────────────────────
-    const attachZone = document.getElementById('attachZone');
-    attachZone.addEventListener('dragover', e => { e.preventDefault(); attachZone.classList.add('dragover'); });
-    attachZone.addEventListener('dragleave', () => attachZone.classList.remove('dragover'));
-    attachZone.addEventListener('drop', e => {
-      e.preventDefault(); attachZone.classList.remove('dragover');
-      if (e.dataTransfer.files[0]) processAttach(e.dataTransfer.files[0]);
-    });
-
-    function handleAttach(input) {
-      if (input.files[0]) processAttach(input.files[0]);
+    // ─── 附件上传 ────────────────────────────────────────────────
+    function handleAttach(input, sceneId) {
+      if (input.files[0]) processAttach(input.files[0], sceneId);
     }
 
-    function processAttach(file) {
+    function processAttach(file, sceneId) {
       if (file.size > 5 * 1024 * 1024) { showToast('附件不能超过 5MB', 'error'); return; }
-      attachFile = file;
+      const sid = getSceneSid(sceneId);
+      attachFiles[sceneId] = file;
       const reader = new FileReader();
       reader.onload = () => {
-        const preview = reader.result;
-        document.getElementById('attachPreview').innerHTML = file.type.startsWith('image/')
-          ? `<img src="${preview}">`
+        document.getElementById('attachPreview-' + sid).innerHTML = file.type.startsWith('image/')
+          ? `<img src="${reader.result}">`
           : `<div style="font-size:13px;color:var(--text-secondary)">${file.name} (${(file.size/1024).toFixed(0)}KB)</div>`;
         showToast('附件已上传', 'info');
       };
       reader.readAsDataURL(file);
     }
 
-    // ─── 提交 ───────────────────────────────────────────────────
+    // ─── 提交 ────────────────────────────────────────────────────
     async function submitExpense() {
       const feeType = document.getElementById('s_type').value;
-      const sceneId = document.getElementById('s_scene').value;
-      const sceneText = document.getElementById('s_scene').selectedOptions[0]?.textContent || '';
-      const reason = document.getElementById('s_reason').value.trim();
-      const amount = parseFloat(document.getElementById('s_amount').value);
 
       if (!feeType) { showToast('请选择费用类型', 'error'); return; }
-      if (!sceneId) { showToast('请选择场景说明', 'error'); return; }
-      if (!reason) { showToast('请填写事由描述', 'error'); return; }
-      if (!invoiceFile) { showToast('请上传发票', 'error'); return; }
+      if (selectedSceneIds.length === 0) { showToast('请至少选择一个场景', 'error'); return; }
+
+      for (const sceneId of selectedSceneIds) {
+        const sid = getSceneSid(sceneId);
+        const reason = document.getElementById('s_reason-' + sid)?.value.trim();
+        if (!reason) { showToast('请填写每个场景的事由描述', 'error'); return; }
+        if (!invoiceFiles[sceneId]) { showToast('请为每个场景上传发票', 'error'); return; }
+      }
 
       const user = getCurrentUser();
       const btn = document.getElementById('submitBtn');
       btn.disabled = true; btn.textContent = '提交中...';
 
       try {
-        btn.textContent = '上传附件...';
-        const [invoiceAttachment, attachAttachment] = await Promise.all([
-          teableUploadAttachment(invoiceFile),
-          attachFile ? teableUploadAttachment(attachFile) : Promise.resolve(null),
-        ]);
-
-        btn.textContent = '提交中...';
+        // 一次性取台账，确保序号唯一
         const ledgers = await teableGet(TABLE_LEDGER, true);
-        const maxNo = ledgers.reduce((m, r) => Math.max(m, r.fields['编号'] || 0), 0);
-        const ledgerNo = maxNo + 1;
+        let maxNo = ledgers.reduce((m, r) => Math.max(m, r.fields['编号'] || 0), 0);
+
         const isAccrual = document.getElementById('s_isAccrual').value;
+        const total = selectedSceneIds.length;
 
-        await teableCreate(TABLE_LEDGER, {
-          '编号': ledgerNo,
-          '账期': document.getElementById('s_period').value || new Date().toISOString(),
-          '付款金额': amount || 0,
-          '预提/实付': isAccrual === '是' ? '预提' : '实付',
-          '当前进度': isAccrual === '是' ? '待预提' : '费控提报中',
-          '提交人': user.account,
-          '提交费控日期': new Date().toISOString(),
-          '费用类型': feeType,
-          '费用场景说明': sceneText,
-          '负责业务人': user.account,
-          '场景配置ID': selectedConfigId,
-        });
+        for (let i = 0; i < total; i++) {
+          const sceneId = selectedSceneIds[i];
+          const sid = getSceneSid(sceneId);
+          const record = configRecords.find(r => r.id === sceneId);
+          const f = record.fields;
+          const sceneName = f['场景说明'] || '-';
+          const ledgerNo = ++maxNo;
+          const amount = parseFloat(document.getElementById('s_amount-' + sid).value);
+          const reason = document.getElementById('s_reason-' + sid).value.trim();
 
-        await teableCreate(TABLE_SUBMIT, {
-          '费用类型': feeType,
-          '场景说明': sceneText,
-          '费控单据类型': document.getElementById('s_fk_docType').value,
-          '是否预提': isAccrual,
-          '法律主体': document.getElementById('s_legal').value,
-          '供应商/收款方': document.getElementById('s_supplier').value,
-          '费用承担期间': document.getElementById('s_period').value || null,
-          '类型': document.getElementById('s_splitType').value,
-          '纸质单据': document.getElementById('s_paper').value,
-          '是否员工垫付': document.getElementById('s_selfPay').value,
-          '事由描述': reason,
-          '费控费用类型': document.getElementById('s_fk_feeType').value,
-          '费控费用项目': document.getElementById('s_fk_feeItem').value,
-          '单价': amount || null,
-          '是否关联项目': document.getElementById('s_linkProject').value || '否',
-          '费控战斗单元': document.getElementById('s_fk_unit').value,
-          '费控分摊部门': document.getElementById('s_fk_dept').value,
-          '费控现金事务': document.getElementById('s_fk_cash').value,
-          '发票类型': document.getElementById('s_invoiceType').value,
-          '税率': document.getElementById('s_taxRate').value,
-          '受益日期从': document.getElementById('s_benefitFrom').value || null,
-          '受益日期到': document.getElementById('s_benefitTo').value || null,
-          '发票图片': [invoiceAttachment],
-          '附件': attachAttachment ? [attachAttachment] : [],
-          '合同编号': document.getElementById('s_contract').value,
-          '付款方式': document.getElementById('s_payMethod').value,
-          '创建人': user.account,
-          '创建时间': new Date().toISOString(),
-          '场景配置ID': selectedConfigId,
-          '台账编号': String(ledgerNo),
-          'OCR结果': ocrRawResult,
-        });
+          btn.textContent = `上传附件 (${i+1}/${total})...`;
+          const [invoiceAttachment, attachAttachment] = await Promise.all([
+            teableUploadAttachment(invoiceFiles[sceneId]),
+            attachFiles[sceneId] ? teableUploadAttachment(attachFiles[sceneId]) : Promise.resolve(null),
+          ]);
 
-        trackAction('提交费用:' + feeType + '-' + sceneText, 'submit.html');
-        showToast('费用提报成功！');
+          btn.textContent = `提交中 (${i+1}/${total})...`;
+
+          await teableCreate(TABLE_LEDGER, {
+            '编号': ledgerNo,
+            '账期': document.getElementById('s_period-' + sid).value || new Date().toISOString(),
+            '付款金额': amount || 0,
+            '预提/实付': isAccrual === '是' ? '预提' : '实付',
+            '当前进度': isAccrual === '是' ? '待预提' : '费控提报中',
+            '提交人': user.account,
+            '提交费控日期': new Date().toISOString(),
+            '费用类型': feeType,
+            '费用场景说明': sceneName,
+            '负责业务人': user.account,
+            '场景配置ID': sceneId,
+          });
+
+          await teableCreate(TABLE_SUBMIT, {
+            '费用类型': feeType,
+            '场景说明': sceneName,
+            '费控单据类型': document.getElementById('s_fk_docType-' + sid).value,
+            '是否预提': isAccrual,
+            '法律主体': document.getElementById('s_legal-' + sid).value,
+            '供应商/收款方': document.getElementById('s_supplier-' + sid).value,
+            '费用承担期间': document.getElementById('s_period-' + sid).value || null,
+            '类型': document.getElementById('s_splitType').value,
+            '纸质单据': document.getElementById('s_paper').value,
+            '是否员工垫付': document.getElementById('s_selfPay').value,
+            '事由描述': reason,
+            '费控费用类型': document.getElementById('s_fk_feeType-' + sid).value,
+            '费控费用项目': document.getElementById('s_fk_feeItem-' + sid).value,
+            '单价': amount || null,
+            '是否关联项目': document.getElementById('s_linkProject-' + sid).value || '否',
+            '费控战斗单元': document.getElementById('s_fk_unit-' + sid).value,
+            '费控分摊部门': document.getElementById('s_fk_dept-' + sid).value,
+            '费控现金事务': document.getElementById('s_fk_cash-' + sid).value,
+            '发票类型': document.getElementById('s_invoiceType-' + sid).value,
+            '税率': document.getElementById('s_taxRate-' + sid).value,
+            '受益日期从': document.getElementById('s_benefitFrom-' + sid).value || null,
+            '受益日期到': document.getElementById('s_benefitTo-' + sid).value || null,
+            '发票图片': [invoiceAttachment],
+            '附件': attachAttachment ? [attachAttachment] : [],
+            '合同编号': document.getElementById('s_contract-' + sid).value,
+            '付款方式': document.getElementById('s_payMethod').value,
+            '创建人': user.account,
+            '创建时间': new Date().toISOString(),
+            '场景配置ID': sceneId,
+            '台账编号': String(ledgerNo),
+            'OCR结果': ocrRawResults[sceneId] || '',
+          });
+
+          trackAction('提交费用:' + feeType + '-' + sceneName, 'submit.html');
+        }
+
+        showToast(total > 1 ? `费用提报成功！共提交 ${total} 条` : '费用提报成功！');
         setTimeout(() => location.href = 'ledger.html', 1500);
       } catch (e) {
         showToast('提交失败: ' + e.message, 'error');
