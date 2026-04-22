@@ -18,22 +18,24 @@
         <div id="noPermissionHint" style="display:none;padding:10px 14px;background:#fff4e5;border:1px solid #ffb020;border-radius:6px;color:#7a4a00;font-size:13px;margin-bottom:10px">
           您当前工号未关联任何场景（负责人或跟进人），暂无提报权限。如需权限请联系管理员。
         </div>
-        <div class="form-row single">
+        <div class="form-row">
           <div class="form-group">
             <label class="form-label">费用类型<span class="required">*</span></label>
             <select class="form-select" id="s_type" disabled>
               <option value="">加载中...</option>
             </select>
           </div>
-        </div>
-        <div id="sceneOptionsWrap" style="display:none">
-          <div class="form-label" style="margin-bottom:8px">场景说明<span class="required">*</span></div>
-          <div class="scene-options" id="sceneOptions"></div>
+          <div class="form-group" id="sceneOptionsGroup" style="display:none">
+            <label class="form-label">场景说明<span class="required">*</span></label>
+            <div class="scene-options" id="sceneOptions"></div>
+          </div>
         </div>
       </div>
 
       <!-- 动态场景表单块容器 -->
-      <div class="scene-blocks-container" id="sceneBlocksContainer"></div>
+      <div id="sceneBlocksScroll">
+        <div class="scene-blocks-container" id="sceneBlocksContainer"></div>
+      </div>
 
       <!-- 2. 其他设置（共享，折叠） -->
       <details class="form-section collapsible" style="border-bottom:none">
@@ -157,12 +159,12 @@
       attachFiles = {};
       ocrRawResults = {};
 
-      const wrap = document.getElementById('sceneOptionsWrap');
+      const group = document.getElementById('sceneOptionsGroup');
       if (this.value) {
-        wrap.style.display = 'block';
+        group.style.display = 'flex';
         renderSceneOptions();
       } else {
-        wrap.style.display = 'none';
+        group.style.display = 'none';
         document.getElementById('sceneOptions').innerHTML = '';
       }
     });
@@ -206,6 +208,7 @@
       container.appendChild(div.firstElementChild);
 
       setupUploadZone(sceneId, getSceneSid(sceneId));
+      updateBlocksLayout();
     }
 
     function removeScene(sceneId) {
@@ -224,6 +227,13 @@
 
       const lbl = document.getElementById('scene-opt-' + sid);
       if (lbl) { lbl.classList.remove('checked'); lbl.querySelector('input').checked = false; }
+      updateBlocksLayout();
+    }
+
+    function updateBlocksLayout() {
+      const count = selectedSceneIds.length;
+      document.getElementById('sceneBlocksContainer').classList.toggle('compact', count > 2);
+      document.getElementById('sceneBlocksScroll').classList.toggle('scrollable', count > 4);
     }
 
     // ─── 渲染单个场景块 ──────────────────────────────────────────
@@ -470,9 +480,13 @@
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const reader = new FileReader();
       reader.onload = async () => {
-        document.getElementById('uploadPreview-' + sid).innerHTML = isPdf
-          ? `<div style="font-size:13px;color:var(--text-secondary);padding:8px 0">${file.name} (${(file.size/1024).toFixed(0)}KB)</div>`
-          : `<img src="${reader.result}">`;
+        const previewImg = isPdf ? '' : `<img src="${reader.result}" style="max-width:100%;max-height:150px;border-radius:var(--radius);display:block;margin-bottom:6px">`;
+        document.getElementById('uploadPreview-' + sid).innerHTML =
+          previewImg +
+          `<div class="upload-file-info">
+            <span class="upload-file-name">📄 ${escHtml(file.name)} <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(${(file.size/1024).toFixed(0)}KB)</span></span>
+            <button class="upload-file-delete" onclick="deleteInvoice('${sceneId}')" title="删除发票">✕</button>
+          </div>`;
 
         const ocrDiv = document.getElementById('ocrResult-' + sid);
         ocrDiv.style.display = 'block';
@@ -565,12 +579,33 @@
       attachFiles[sceneId] = file;
       const reader = new FileReader();
       reader.onload = () => {
-        document.getElementById('attachPreview-' + sid).innerHTML = file.type.startsWith('image/')
-          ? `<img src="${reader.result}">`
-          : `<div style="font-size:13px;color:var(--text-secondary)">${file.name} (${(file.size/1024).toFixed(0)}KB)</div>`;
+        const previewImg = file.type.startsWith('image/') ? `<img src="${reader.result}" style="max-width:100%;max-height:120px;border-radius:var(--radius);display:block;margin-bottom:6px">` : '';
+        document.getElementById('attachPreview-' + sid).innerHTML =
+          previewImg +
+          `<div class="upload-file-info">
+            <span class="upload-file-name">📎 ${escHtml(file.name)} <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(${(file.size/1024).toFixed(0)}KB)</span></span>
+            <button class="upload-file-delete" onclick="deleteAttach('${sceneId}')" title="删除附件">✕</button>
+          </div>`;
         showToast('附件已上传', 'info');
       };
       reader.readAsDataURL(file);
+    }
+
+    // ─── 删除上传文件 ────────────────────────────────────────────
+    function deleteInvoice(sceneId) {
+      delete invoiceFiles[sceneId];
+      const sid = getSceneSid(sceneId);
+      document.getElementById('uploadPreview-' + sid).innerHTML = '';
+      document.getElementById('fileInput-' + sid).value = '';
+      const ocrDiv = document.getElementById('ocrResult-' + sid);
+      if (ocrDiv) { ocrDiv.style.display = 'none'; ocrDiv.className = 'ocr-result'; }
+    }
+
+    function deleteAttach(sceneId) {
+      delete attachFiles[sceneId];
+      const sid = getSceneSid(sceneId);
+      document.getElementById('attachPreview-' + sid).innerHTML = '';
+      document.getElementById('attachInput-' + sid).value = '';
     }
 
     // ─── 提交 ────────────────────────────────────────────────────

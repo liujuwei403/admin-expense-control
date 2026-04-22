@@ -476,13 +476,27 @@ tr:hover td { background: var(--bg-hover); }
 .scene-option-label input { display: none; }
 
 /* ─── Scene Blocks ────────────────────────────────────────────── */
-.scene-blocks-container {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+.scene-blocks-scroll {
+  width: 100%;
   margin-bottom: 4px;
 }
+/* 超过4个时顶部出现滚动条（rotateX 把滚动条翻到顶部） */
+.scene-blocks-scroll.scrollable {
+  overflow-x: auto;
+  transform: rotateX(180deg);
+}
+.scene-blocks-scroll.scrollable .scene-blocks-container {
+  transform: rotateX(180deg);
+}
+.scene-blocks-container {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 16px;
+  min-width: min-content;
+}
 .scene-block {
+  min-width: 340px;
+  flex: 1;
   border: 1px solid #c7d2fe;
   border-radius: var(--radius-lg);
   margin-bottom: 16px;
@@ -514,6 +528,35 @@ tr:hover td { background: var(--bg-hover); }
 .scene-block-body details.collapsible > summary {
   margin-bottom: 0; padding-bottom: 8px;
 }
+/* 超过2个时块内字段折叠为单列 */
+.scene-blocks-container.compact .form-row:not(.single) {
+  grid-template-columns: 1fr;
+}
+.scene-blocks-container.compact .scene-block {
+  min-width: 260px;
+}
+
+/* ─── Upload File Info ────────────────────────────────────────── */
+.upload-file-info {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px;
+  background: var(--primary-light);
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius);
+  margin-top: 8px;
+}
+.upload-file-name {
+  font-size: 14px; font-weight: 700; color: var(--primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1;
+}
+.upload-file-delete {
+  background: none; border: none; cursor: pointer;
+  color: var(--danger); font-size: 15px; padding: 2px 6px;
+  border-radius: 4px; flex-shrink: 0; line-height: 1;
+  transition: background 0.15s;
+}
+.upload-file-delete:hover { background: var(--danger-light); }
 
 /* ─── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 768px) {
