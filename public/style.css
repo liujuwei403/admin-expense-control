@@ -536,6 +536,20 @@ tr:hover td { background: var(--bg-hover); }
   min-width: 260px;
 }
 
+/* ─── Total Fee Bar ───────────────────────────────────────────── */
+.total-fee-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, var(--primary-light) 0%, #e0e7ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  font-size: 14px; color: var(--text-secondary);
+}
+.total-fee-bar strong {
+  font-size: 22px; font-weight: 700; color: var(--primary); letter-spacing: -0.5px;
+}
+
 /* ─── Upload File Info ────────────────────────────────────────── */
 .upload-file-info {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
