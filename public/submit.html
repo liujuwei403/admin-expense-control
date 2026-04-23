@@ -96,6 +96,7 @@
     let attachFiles = {};    // sceneId → File
     let ocrRawResults = {};  // sceneId → string
     const debouncedLLM = {};
+    const extraFkFieldNames = {}; // { sid: ['字段名', ...] } 场景配置表中超出已知字段的额外映射字段
 
     // ─── 工具 ────────────────────────────────────────────────────
     function getSceneSid(id) {
@@ -232,6 +233,7 @@
       delete attachFiles[sceneId];
       delete ocrRawResults[sceneId];
       delete debouncedLLM[sid];
+      delete extraFkFieldNames[sid];
 
       const lbl = document.getElementById('scene-opt-' + sid);
       if (lbl) { lbl.classList.remove('checked'); lbl.querySelector('input').checked = false; }
@@ -288,6 +290,44 @@
       const fkCash    = escHtml(f['费控现金事务'] || '');
       const hasUnit   = f['费控战斗单元'] && f['费控战斗单元'] !== '空';
       const linkProject = hasUnit ? '是' : '否';
+
+      // 将 Teable 各类型字段值统一转为可显示字符串
+      function fkVal(v) {
+        if (v === null || v === undefined || v === '') return '';
+        if (Array.isArray(v)) return v.map(i => i?.title || String(i)).filter(Boolean).join('、');
+        if (typeof v === 'object') return v.title || '';
+        return String(v);
+      }
+
+      // 排除已在表单中硬编码处理的字段，剩余有值字段动态展示
+      const KNOWN_FK = new Set([
+        '场景说明','费用类型','负责人','跟进人',
+        '费控单据类型','法律主体','供应商/收款方','合同编号',
+        '费控费用类型','费控费用项目','费控战斗单元','费控分摊部门','费控现金事务'
+      ]);
+      const extraFkList = Object.entries(f)
+        .filter(([k, v]) => !KNOWN_FK.has(k) && fkVal(v) !== '')
+        .map(([k, v]) => ({ name: k, val: escHtml(fkVal(v)) }));
+      extraFkFieldNames[sid] = extraFkList.map(x => x.name);
+
+      // 两列布局，不足两个时右侧留空
+      const extraFkHtml = (() => {
+        let html = '';
+        for (let i = 0; i < extraFkList.length; i += 2) {
+          const a = extraFkList[i], b = extraFkList[i + 1];
+          html += `<div class="form-row">
+            <div class="form-group">
+              <label class="form-label auto-fill-label">${escHtml(a.name)}</label>
+              <input class="form-input auto-filled" id="s_extra_${sid}_${i}" readonly value="${a.val}" placeholder="-">
+            </div>
+            ${b ? `<div class="form-group">
+              <label class="form-label auto-fill-label">${escHtml(b.name)}</label>
+              <input class="form-input auto-filled" id="s_extra_${sid}_${i + 1}" readonly value="${b.val}" placeholder="-">
+            </div>` : '<div class="form-group"></div>'}
+          </div>`;
+        }
+        return html;
+      })();
 
       return `
 <div class="scene-block" id="scene-block-${sid}" data-scene-id="${id}">
@@ -432,6 +472,7 @@
             <input class="form-input auto-filled" id="s_fk_cash-${sid}" readonly value="${fkCash}" placeholder="-">
           </div>
         </div>
+        ${extraFkHtml}
       </div>
     </details>
 
@@ -704,6 +745,13 @@
 
           btn.textContent = `提交中 (${i+1}/${total})...`;
 
+          // 收集本场景动态额外字段的值
+          const extraFkData = {};
+          (extraFkFieldNames[sid] || []).forEach((name, idx) => {
+            const el = document.getElementById(`s_extra_${sid}_${idx}`);
+            if (el && el.value) extraFkData[name] = el.value;
+          });
+
           await teableCreate(TABLE_LEDGER, {
             '编号': ledgerNo,
             '账期': document.getElementById('s_period-' + sid).value || new Date().toISOString(),
@@ -716,6 +764,7 @@
             '费用场景说明': sceneName,
             '负责业务人': user.account,
             '场景配置ID': sceneId,
+            ...extraFkData,
           });
 
           await teableCreate(TABLE_SUBMIT, {
@@ -750,6 +799,7 @@
             '场景配置ID': sceneId,
             '台账编号': String(ledgerNo),
             'OCR结果': ocrRawResults[sceneId] || '',
+            ...extraFkData,
           });
 
           trackAction('提交费用:' + feeType + '-' + sceneName, 'submit.html');
