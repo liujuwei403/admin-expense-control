@@ -256,6 +256,9 @@ details.collapsible > summary:hover .collapse-caret {
   padding: 1px 6px; border-radius: 4px;
   font-weight: 500;
 }
+.llm-status { margin-left: 6px; font-size: 0.75rem; color: var(--text-muted); }
+.llm-status.parsing { color: var(--info); }
+.llm-status.success { color: var(--success); }
 
 /* Template hint */
 .form-hint {

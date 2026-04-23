@@ -342,7 +342,7 @@
       <div class="form-section-title">费用信息</div>
       <div class="form-row single">
         <div class="form-group">
-          <label class="form-label">事由描述<span class="required">*</span></label>
+          <label class="form-label">事由描述<span class="required">*</span><span id="llm-status-${sid}" class="llm-status"></span></label>
           <textarea class="form-textarea" id="s_reason-${sid}" placeholder="申请报销XX年XX月XX日费用 到 XX年XX月XX日费用" oninput="handleReasonInput(this,'${sid}')"></textarea>
           <div class="form-hint">示例：申请报销2026年1月1日房租费用 到 2026年3月31日房租费用，含物业附加费</div>
         </div>
@@ -456,6 +456,8 @@
     }
 
     async function parseDatesWithLLM(text, sid) {
+      const statusEl = document.getElementById('llm-status-' + sid);
+      if (statusEl) { statusEl.textContent = '解析中…'; statusEl.className = 'llm-status parsing'; }
       try {
         const resp = await fetch('http://ai-service.tal.com/openai-compatible/v1/chat/completions', {
           method: 'POST',
@@ -481,9 +483,21 @@
           const parsed = JSON.parse(match[0]);
           if (parsed.from) document.getElementById('s_benefitFrom-' + sid).value = parsed.from;
           if (parsed.to)   document.getElementById('s_benefitTo-' + sid).value   = parsed.to;
+          if (statusEl) { statusEl.textContent = '✓ 已解析'; statusEl.className = 'llm-status success'; }
+          return;
         }
       } catch (_) {
-        // 网络或解析失败时静默忽略
+        // LLM 不可用（混合内容拦截/网络超时），降级到正则
+      }
+      // 降级：正则解析
+      const fallback = parseBenefitDates(text);
+      if (fallback.from || fallback.to) {
+        if (fallback.from) document.getElementById('s_benefitFrom-' + sid).value = fallback.from;
+        if (fallback.to)   document.getElementById('s_benefitTo-' + sid).value   = fallback.to;
+        if (statusEl) { statusEl.textContent = '✓ 已解析（本地）'; statusEl.className = 'llm-status success'; }
+      } else {
+        if (statusEl) { statusEl.textContent = ''; statusEl.className = 'llm-status'; }
+        showToast('日期自动解析失败，请手动填写受益日期', 'warning');
       }
     }
 

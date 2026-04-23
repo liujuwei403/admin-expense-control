@@ -359,25 +359,141 @@ function parseInvoiceTexts(texts) {
 //   有日：直接采用
 //   无日：起始默认 01，结束默认该月最后一天
 function parseBenefitDates(description) {
-  const pattern = /(\d{4})\s*年\s*(\d{1,2})\s*月(?:\s*(\d{1,2})\s*日)?/g;
-  const matches = [...description.matchAll(pattern)];
-  if (matches.length === 0) return { from: null, to: null };
+  if (!description || !description.trim()) return { from: null, to: null };
 
-  const pad = n => String(n).padStart(2, '0');
+  const pad  = n => String(n).padStart(2, '0');
+  const now  = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  const curD = now.getDate();
 
-  const first = matches[0];
-  const fromYear = parseInt(first[1]);
-  const fromMonth = parseInt(first[2]);
-  const fromDay = first[3] ? parseInt(first[3]) : 1;
-  const fromDate = `${fromYear}-${pad(fromMonth)}-${pad(fromDay)}`;
+  function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
+  function ds(y, m, d) { return `${y}-${pad(m)}-${pad(d)}`; }
+  function relDay(offset) {
+    const t = new Date(now); t.setDate(curD + offset);
+    return `${t.getFullYear()}年${t.getMonth()+1}月${t.getDate()}日`;
+  }
 
-  const last = matches[matches.length - 1];
-  const toYear = parseInt(last[1]);
-  const toMonth = parseInt(last[2]);
-  const toDay = last[3] ? parseInt(last[3]) : new Date(toYear, toMonth, 0).getDate();
-  const toDate = `${toYear}-${pad(toMonth)}-${pad(toDay)}`;
+  // 中文数字 → 整数（1–31）
+  function cn2n(s) {
+    if (!s) return null;
+    s = s.trim();
+    if (/^\d+$/.test(s)) return parseInt(s, 10);
+    const d = {'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+    if (s === '十') return 10;
+    if (s.startsWith('十')) return 10 + (d[s[1]] || 0);
+    if (s.includes('十')) {
+      const i = s.indexOf('十');
+      return (d[s[i-1]] || 0) * 10 + (d[s[i+1]] || 0);
+    }
+    return d[s[0]] || null;
+  }
 
-  return { from: fromDate, to: toDate };
+  // ① ISO 格式优先（YYYY-MM-DD 或 YYYY/MM/DD）
+  const iso = [...description.matchAll(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/g)];
+  if (iso.length >= 2) {
+    return {
+      from: ds(iso[0][1], iso[0][2], iso[0][3]),
+      to:   ds(iso[iso.length-1][1], iso[iso.length-1][2], iso[iso.length-1][3])
+    };
+  }
+
+  // ② 相对词 & 特殊词预处理
+  const lastM = curM === 1  ? 12 : curM - 1;  const lastY = curM === 1  ? curY - 1 : curY;
+  const nextM = curM === 12 ? 1  : curM + 1;  const nextY = curM === 12 ? curY + 1 : curY;
+
+  // 季度映射：索引 0–3 对应 Q1–Q4
+  const qRanges = [[1,3],[4,6],[7,9],[10,12]];
+  const cnQ = {'一':0,'二':1,'三':2,'四':3,'1':0,'2':1,'3':2,'4':3};
+  function qStr(yr, qi) {
+    const [m1,m2] = qRanges[qi];
+    return `${yr}年${m1}月到${yr}年${m2}月`;
+  }
+  function fixY(y) { return +y < 100 ? +y + 2000 : +y; }
+
+  let text = description
+    // 相对天
+    .replace(/前天/g, relDay(-2)).replace(/昨天|昨日/g, relDay(-1))
+    .replace(/今天|今日/g, relDay(0)).replace(/明天|明日/g, relDay(1))
+    .replace(/后天/g, relDay(2))
+    // 相对年
+    .replace(/去年/g, `${curY-1}年`).replace(/明年/g, `${curY+1}年`).replace(/今年/g, `${curY}年`)
+    // 相对月
+    .replace(/上月|上个月/g, `${lastY}年${lastM}月`)
+    .replace(/下月|下个月/g, `${nextY}年${nextM}月`)
+    .replace(/本月/g, `${curY}年${curM}月`)
+    // 上/下半年（先处理带年份）
+    .replace(/(\d{2,4})年?上半年/g, (_,y) => `${fixY(y)}年1月到${fixY(y)}年6月`)
+    .replace(/(\d{2,4})年?下半年/g, (_,y) => `${fixY(y)}年7月到${fixY(y)}年12月`)
+    .replace(/上半年/g, `${curY}年1月到${curY}年6月`)
+    .replace(/下半年/g, `${curY}年7月到${curY}年12月`)
+    // 季度（带年份先匹配）
+    .replace(/(\d{2,4})年?第?([一二三四])季度/g, (_,y,q) => qStr(fixY(y), cnQ[q]))
+    .replace(/(\d{2,4})年?[Qq]([1-4])/g,        (_,y,q) => qStr(fixY(y), cnQ[q]))
+    .replace(/第?([一二三四])季度/g, (_,q) => qStr(curY, cnQ[q]))
+    .replace(/[Qq]([1-4])/g,        (_,q) => qStr(curY, cnQ[q]));
+
+  // ③ 片段提取 {year, month, day}
+  const CN = '[一二三四五六七八九十\\d]+';
+  function extractParts(s) {
+    const ym = s.match(/(\d{2,4})年/);
+    const mm = s.match(new RegExp(`(${CN})月`));
+    const dm = s.match(new RegExp(`(${CN})[日号]`));
+    let year = null;
+    if (ym) { year = parseInt(ym[1]); if (year < 100) year += 2000; }
+    const month = mm ? cn2n(mm[1]) : null;
+    let day = dm ? cn2n(dm[1]) : null;
+
+    if (!day && mm) {
+      const afterMo = s.slice(s.indexOf('月') + 1).trim();
+      if (/^月?[初头]/.test(afterMo)) {
+        // 月初/月头/初 → 1 日
+        day = 1;
+      } else if (/^月?[末底尾]/.test(afterMo)) {
+        // 月末/月底/月尾/末/底 → 当月最后一天
+        if (month) day = daysInMonth(year || curY, month);
+      } else if (/^上半月/.test(afterMo)) {
+        // 上半月 → 记 day=1（结束端用 15）
+        day = 1;
+      } else if (/^下半月/.test(afterMo)) {
+        // 下半月 → 16 日起
+        day = 16;
+      } else {
+        // 无后缀数字，如"四月十五"
+        const trail = afterMo.match(new RegExp(`^(${CN})(?![月年])`));
+        if (trail) day = cn2n(trail[1]);
+      }
+    }
+    return { year, month, day };
+  }
+
+  // ④ 分割 → 过滤有日期信息的片段 → 推断缺省值
+  const segments = text.split(/到|至|[～~—–]/).map(s => s.trim()).filter(Boolean);
+  const dated = segments.map(extractParts).filter(p => p.year || p.month || p.day);
+
+  if (dated.length >= 2) {
+    const A = dated[0], B = dated[dated.length - 1];
+    if (!A.year) A.year = curY;
+    if (!B.year) B.year = A.year;
+    if (!B.month && A.month) B.month = A.month; // 同月不同日，如"1月5日到18号"
+    const fd = A.day || 1;
+    const td = B.day || (B.month ? daysInMonth(B.year, B.month) : 1);
+    if (A.month && B.month) return { from: ds(A.year, A.month, fd), to: ds(B.year, B.month, td) };
+    if (A.year && B.year)   return { from: `${A.year}-01-01`, to: `${B.year}-12-31` };
+  }
+
+  if (dated.length === 1) {
+    const p = dated[0], y = p.year || curY;
+    if (p.month) {
+      return {
+        from: ds(y, p.month, p.day || 1),
+        to:   ds(y, p.month, p.day || daysInMonth(y, p.month))
+      };
+    }
+    if (p.year) return { from: `${y}-01-01`, to: `${y}-12-31` };
+  }
+
+  return { from: null, to: null };
 }
 
 // ─── 工具函数 ───────────────────────────────────────────────────
