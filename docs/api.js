@@ -582,8 +582,6 @@ function renderNav(activePage) {
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
   };
 
-  const menuSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
-
   const navLinks = pages
     .filter(p => {
       if (p.needAdmin && !isAdmin()) return false;
@@ -595,16 +593,23 @@ function renderNav(activePage) {
       <span class="sidebar-text">${p.label}</span>
     </a>`).join('');
 
-  const collapseSvg = '<svg viewBox="0 0 24 12" width="28" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,2 4,6 20,10"/></svg>';
-
   document.getElementById('sidebar').innerHTML = `
     <div class="sidebar-logo">
       <span class="logo-text">快提快报</span>
-      <button class="sidebar-toggle" onclick="toggleSidebar()" title="折叠/展开">${menuSvg}</button>
     </div>
     <nav class="sidebar-nav">${navLinks}</nav>
-    <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="收起/展开侧边栏">${collapseSvg}</button>
   `;
+
+  // 右边框浮动收起按钮（Notion 风格），仅创建一次
+  if (!document.getElementById('sidebar-edge-toggle')) {
+    const btn = document.createElement('button');
+    btn.id = 'sidebar-edge-toggle';
+    btn.className = 'sidebar-edge-toggle';
+    btn.title = '收起/展开侧边栏';
+    btn.onclick = toggleSidebar;
+    btn.innerHTML = '<svg viewBox="0 0 8 14" width="8" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,1 2,7 6,13"/></svg>';
+    document.body.appendChild(btn);
+  }
 
   const nickname = user?.nickname || '';
   const initials = nickname ? nickname.charAt(0) : '?';
