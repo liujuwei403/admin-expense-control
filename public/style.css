@@ -77,9 +77,9 @@ a { color: var(--primary); text-decoration: none; }
 
 /* ─── Sidebar ─────────────────────────────────────────────────── */
 .sidebar-logo {
-  padding: 20px 16px;
+  padding: 16px;
   border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 10px;
   min-height: 64px; flex-shrink: 0;
 }
 .sidebar-logo-icon {
