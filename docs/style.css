@@ -136,6 +136,18 @@ body.sidebar-collapsed .sidebar-link { justify-content: center; padding: 10px; }
 body.sidebar-collapsed .sidebar-logo { justify-content: center; padding: 16px 8px; }
 body.sidebar-collapsed .sidebar-footer { display: none; }
 
+/* ─── Sidebar Collapse Button ─────────────────────────────────── */
+.sidebar-collapse-btn {
+  width: 100%; padding: 10px 0;
+  background: none; border: none; border-top: 1px solid var(--border);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.sidebar-collapse-btn:hover { background: var(--bg-hover); color: var(--primary); }
+.sidebar-collapse-btn svg { transition: transform 0.2s ease; }
+body.sidebar-collapsed .sidebar-collapse-btn svg { transform: rotate(180deg); }
+
 /* ─── Buttons ─────────────────────────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;

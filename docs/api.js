@@ -595,12 +595,15 @@ function renderNav(activePage) {
       <span class="sidebar-text">${p.label}</span>
     </a>`).join('');
 
+  const collapseSvg = '<svg viewBox="0 0 24 12" width="28" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,2 4,6 20,10"/></svg>';
+
   document.getElementById('sidebar').innerHTML = `
     <div class="sidebar-logo">
       <span class="logo-text">快提快报</span>
       <button class="sidebar-toggle" onclick="toggleSidebar()" title="折叠/展开">${menuSvg}</button>
     </div>
     <nav class="sidebar-nav">${navLinks}</nav>
+    <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="收起/展开侧边栏">${collapseSvg}</button>
   `;
 
   const nickname = user?.nickname || '';
