@@ -582,13 +582,15 @@ function renderNav(activePage) {
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
   };
 
+  const menuSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+
   const navLinks = pages
     .filter(p => {
       if (p.needAdmin && !isAdmin()) return false;
       if (p.needApprover && !isApprover()) return false;
       return true;
     })
-    .map(p => `<a class="sidebar-link ${activePage === p.href ? 'active' : ''}" href="${p.href}">
+    .map(p => `<a class="sidebar-link ${activePage === p.href ? 'active' : ''}" href="${p.href}" data-label="${p.label}" title="${p.label}">
       <span class="sidebar-icon">${svgIcons[p.icon] || ''}</span>
       <span class="sidebar-text">${p.label}</span>
     </a>`).join('');
@@ -596,20 +598,33 @@ function renderNav(activePage) {
   document.getElementById('sidebar').innerHTML = `
     <div class="sidebar-logo">
       <span class="logo-text">快提快报</span>
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="折叠/展开">${menuSvg}</button>
     </div>
     <nav class="sidebar-nav">${navLinks}</nav>
-    <div class="sidebar-footer">
-      <span class="sidebar-user">${user?.nickname || ''}</span>
-      <button class="btn-logout" onclick="logout()">退出</button>
-    </div>
   `;
+
+  const nickname = user?.nickname || '';
+  const initials = nickname ? nickname.charAt(0) : '?';
 
   document.getElementById('topbar').innerHTML = `
     <div class="topbar-title">${pages.find(p => p.href === activePage)?.label || ''}</div>
     <div class="topbar-right">
-      <span class="topbar-name">${user?.nickname || ''}</span>
+      <div class="topbar-user">
+        <div class="topbar-avatar">${initials}</div>
+        <span class="topbar-name">${nickname}</span>
+        <button class="btn-logout" onclick="logout()">退出</button>
+      </div>
     </div>
   `;
+
+  if (localStorage.getItem('sidebar_collapsed') === '1') {
+    document.body.classList.add('sidebar-collapsed');
+  }
+}
+
+function toggleSidebar() {
+  const collapsed = document.body.classList.toggle('sidebar-collapsed');
+  localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0');
 }
 
 // ─── 操作日志 ─────────────────────────────────────────────────

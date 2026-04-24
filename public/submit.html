@@ -40,7 +40,7 @@
       </div>
 
       <!-- 动态场景表单块容器 -->
-      <div id="sceneBlocksScroll">
+      <div id="sceneBlocksScroll" class="scene-blocks-scroll">
         <div class="scene-blocks-container" id="sceneBlocksContainer"></div>
       </div>
 
@@ -268,7 +268,7 @@
     function updateBlocksLayout() {
       const count = selectedSceneIds.length;
       document.getElementById('sceneBlocksContainer').classList.toggle('compact', count > 2);
-      document.getElementById('sceneBlocksScroll').classList.toggle('scrollable', count > 4);
+      document.getElementById('sceneBlocksScroll').classList.toggle('scrollable', count >= 4);
     }
 
     // ─── 渲染单个场景块 ──────────────────────────────────────────
