@@ -100,14 +100,20 @@ debouncedLLM      // { sid: Function } 每场景的 debounce LLM 调用
 **联动行为：**
 - 任意场景展开/收起"费控映射" → `syncFkDetails()` 同步其他场景
 - 任意金额字段 `input` 事件 → `updateTotalFee()` 更新顶部总费用栏
-- 场景数 >2 → 块内字段折叠为单列（`.compact`）；>4 → 顶部横向滚动条（rotateX 技巧）
+- 场景数 >2 → 块内字段折叠为单列（`.compact`）；**场景数 ≥4 → 横向滚动区激活**（`.scrollable`）
+
+### 横向滚动布局（≥4 个场景）
+- 容器 `<div id="sceneBlocksScroll" class="scene-blocks-scroll">` 获得 `.scrollable` 类
+- 滚动条通过 `transform: rotateX(180deg)` 翻到容器顶部（视觉上在合计栏下方）
+- 每张卡片宽度：`calc((100vw - var(--sidebar-w) - 144px) / 3.5)`，同时显示 3.5 张
+- 支持 `scroll-snap-type: x mandatory` 卡片吸附
 
 ### LLM 日期解析
 事由描述输入 800ms 后调内网 LLM 提取受益日期：
 - 端点：`http://ai-service.tal.com/openai-compatible/v1/chat/completions`
 - 模型：`gpt-5-chat`，需加 `system` message
 - Token：`Bearer 300000485:61b228c575d42cbd37a266636c5b7364`
-- 返回 `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}`，失败静默忽略
+- 返回 `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}`，失败时降级正则解析，仍失败则提示手动填写
 
 ### 提交逻辑
 `submitExpense()` 一次性取台账最大编号，循环所有 `selectedSceneIds`，每个场景分别：上传附件 → `teableCreate(TABLE_LEDGER)` → `teableCreate(TABLE_SUBMIT)`。
@@ -128,6 +134,16 @@ debouncedLLM      // { sid: Function } 每场景的 debounce LLM 调用
 - `getSavedSSO()` — 返回 `{ token, payload }`，`payload.workcode` 是公司工号
 - `handleSSOCallback(ssoToken)` — 调 FC `/auth/callback` 拿 JWT，关联/创建 Teable 用户
 
+**导航渲染（renderNav）**
+- `renderNav(activePage)` — 渲染侧边栏 + topbar，并将 `#sidebar-edge-toggle` 浮动按钮 append 到 `document.body`（仅首次调用时创建）
+- topbar 右侧包含：用户头像（姓名首字）+ 昵称 + 退出按钮；侧边栏底部不再有用户信息
+- 初始化时读取 `localStorage.sidebar_collapsed`，恢复折叠状态
+
+**侧边栏折叠**
+- `toggleSidebar()` — 切换 `document.body` 上的 `sidebar-collapsed` 类，写入 `localStorage`
+- `body.sidebar-collapsed` 状态下覆盖 CSS 变量 `--sidebar-w: var(--sidebar-w-collapsed)`（60px），所有依赖该变量的布局（topbar `left`、main `margin-left`）自动过渡
+- `#sidebar-edge-toggle`：`position: fixed; left: calc(var(--sidebar-w) - 12px)` 浮于侧边栏右边框，展开时箭头朝左，折叠后旋转 180° 朝右
+
 **AI OCR（经 FC 后端代理 PaddleOCR）**
 - `ocrVatInvoice(file)` — 入参是 **File 对象**，带 `sso_jwt` 调 FC `/ocr`，传 `{fileBase64, fileType, jwt}`。FC 调 PaddleOCR 并运行 `parseInvoiceTexts` 解析，返回 `{invoiceType, totalAmount, taxRate, sellerName, purchaserName}`
 - `parseInvoiceTexts(texts)` — FC 侧和前端侧各有一份同逻辑的实现；FC 侧是权威执行路径
@@ -143,6 +159,16 @@ debouncedLLM      // { sid: Function } 每场景的 debounce LLM 调用
 - `parseBenefitDates(description)` — 正则解析日期（submit.html 已改用 LLM，其他页面仍可用）
 - `checkOverdue(record)` / `debounce(fn, ms)`
 
+## style.css — 布局 CSS 变量体系
+
+```css
+--sidebar-w: 220px          /* 侧边栏展开宽度 */
+--sidebar-w-collapsed: 60px /* 侧边栏折叠宽度 */
+--topbar-h: 56px
+```
+
+`body.sidebar-collapsed { --sidebar-w: var(--sidebar-w-collapsed); }` 覆盖变量后，`.topbar`（`left: var(--sidebar-w)`）和 `.main`（`margin-left: var(--sidebar-w)`）自动以 `0.2s ease` 过渡。修改侧边栏宽度只需改 CSS 变量，无需改其他选择器。
+
 ## FC 后端（fc-backend/）
 
 Web 函数，监听 9000，启动命令 `node index.js`。路由：
@@ -155,7 +181,11 @@ Web 函数，监听 9000，启动命令 `node index.js`。路由：
 
 FC 环境变量：`SSO_APP_ID` / `SSO_APP_KEY` / `JWT_SECRET` / `FRONTEND_URL`（CORS origin，必须是纯 origin 无路径） / `PADDLEOCR_TOKEN`。
 
-改完 `fc-backend/index.js` → 用 PowerShell 打 ZIP（`index.js` 和 `package.json` 必须在 ZIP **根目录**，不能套子目录，否则 FC 502）。
+改完 `fc-backend/index.js` → 用 PowerShell 打 ZIP（`index.js` 和 `package.json` 必须在 ZIP **根目录**，不能套子目录，否则 FC 502）：
+
+```powershell
+Compress-Archive -Force -Path fc-backend/index.js, fc-backend/package.json -DestinationPath sso-backend.zip
+```
 
 ## 数据流与权限
 
