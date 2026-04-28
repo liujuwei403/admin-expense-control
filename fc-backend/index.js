@@ -170,6 +170,7 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: result.errmsg }));
         return;
       }
+      console.log('[SSO data keys]', JSON.stringify(result.data));
       const jwt = signJWT({
         account_id: result.data.account_id,
         name: result.data.name,
