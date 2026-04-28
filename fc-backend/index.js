@@ -170,13 +170,11 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: result.errmsg }));
         return;
       }
-      console.log('[SSO data keys]', JSON.stringify(result.data));
       const jwt = signJWT({
         account_id: result.data.account_id,
         name: result.data.name,
         workcode: result.data.workcode,
         email: result.data.email,
-        department: result.data.dept_name || result.data.department || result.data.org_name || '',
       });
       res.writeHead(200);
       res.end(JSON.stringify({ token: jwt, user: result.data }));
