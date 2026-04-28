@@ -255,7 +255,7 @@ async function handleSSOCallback(ssoToken) {
 
   const payload = decodeJWT(data.token);
   const ssoUser = data.user || {};
-  console.log('[SSO user fields]', JSON.stringify(ssoUser));
+  localStorage.setItem('_sso_raw', JSON.stringify(ssoUser));
   const department = ssoUser.dept_name || ssoUser.department || ssoUser.org_name
     || ssoUser.deptName || ssoUser.orgName || ssoUser.dept || payload.department || '';
   const emailPrefix = (payload.email || '').split('@')[0];
