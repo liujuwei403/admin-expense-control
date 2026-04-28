@@ -260,14 +260,18 @@ async function handleSSOCallback(ssoToken) {
   if (record) {
     const f = record.fields;
     if (f['状态'] === '已禁用') throw new Error('账号已被禁用');
-    if (f['状态'] !== '已激活') {
-      await teableUpdate(TABLE_USER, record.id, { '状态': '已激活' });
+    const updateFields = { '状态': '已激活' };
+    if (payload.department && !f['部门']) updateFields['部门'] = payload.department;
+    if (payload.workcode && !f['工号']) updateFields['工号'] = payload.workcode;
+    if (Object.keys(updateFields).length > 1 || f['状态'] !== '已激活') {
+      await teableUpdate(TABLE_USER, record.id, updateFields);
     }
     localStorage.setItem('xzfk_user', JSON.stringify({
       id: record.id,
       account: f['账号'],
       nickname: f['昵称'],
-      department: f['部门'] || '',
+      department: f['部门'] || payload.department || '',
+      workcode: f['工号'] || payload.workcode || '',
       role: f['角色'] || '员工',
       approver: f['审批人'] || '',
     }));
@@ -275,7 +279,8 @@ async function handleSSOCallback(ssoToken) {
     const newUser = await teableCreate(TABLE_USER, {
       '账号': emailPrefix || payload.workcode || 'sso_user',
       '昵称': payload.name || '新用户',
-      '部门': '',
+      '部门': payload.department || '',
+      '工号': payload.workcode || '',
       '角色': '员工',
       '状态': '已激活',
       '注册时间': new Date().toISOString(),
@@ -284,7 +289,8 @@ async function handleSSOCallback(ssoToken) {
       id: newUser.id,
       account: emailPrefix,
       nickname: payload.name || '新用户',
-      department: '',
+      department: payload.department || '',
+      workcode: payload.workcode || '',
       role: '员工',
       approver: '',
     }));

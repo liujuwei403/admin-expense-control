@@ -175,6 +175,7 @@ const server = http.createServer(async (req, res) => {
         name: result.data.name,
         workcode: result.data.workcode,
         email: result.data.email,
+        department: result.data.dept_name || result.data.department || result.data.org_name || '',
       });
       res.writeHead(200);
       res.end(JSON.stringify({ token: jwt, user: result.data }));
