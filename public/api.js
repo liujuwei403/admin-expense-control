@@ -94,7 +94,10 @@ async function teableCreate(tableId, fields) {
     headers: HEADERS,
     body: JSON.stringify({ fieldKeyType: 'name', records: [{ fields }] }),
   });
-  if (!res.ok) throw new Error('创建失败');
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`创建失败 ${res.status}: ${errText.slice(0, 300)}`);
+  }
   cacheClear(tableId);
   return (await res.json()).records?.[0];
 }
@@ -105,7 +108,10 @@ async function teableUpdate(tableId, id, fields) {
     headers: HEADERS,
     body: JSON.stringify({ fieldKeyType: 'name', records: [{ id, fields }] }),
   });
-  if (!res.ok) throw new Error('更新失败');
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`更新失败 ${res.status}: ${errText.slice(0, 300)}`);
+  }
   cacheClear(tableId);
   return (await res.json()).records?.[0];
 }
@@ -115,7 +121,10 @@ async function teableDelete(tableId, id) {
     method: 'DELETE',
     headers: HEADERS,
   });
-  if (!res.ok) throw new Error('删除失败');
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`删除失败 ${res.status}: ${errText.slice(0, 300)}`);
+  }
   cacheClear(tableId);
 }
 
