@@ -556,6 +556,7 @@ const STATUS_COLORS = {
   '费控提报完成': '#16a34a',
   '待付款': '#f59e0b',
   '已付款': '#10b981',
+  '已撤回': '#6b7280',
 };
 
 function statusBadge(status) {

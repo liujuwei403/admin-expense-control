@@ -17,7 +17,7 @@
           <option value="">全部进度</option>
           <option>待预提</option><option>预提完成</option><option>待收账单</option>
           <option>已收账单</option><option>费控提报中</option><option>费控提报完成</option>
-          <option>待付款</option><option>已付款</option>
+          <option>待付款</option><option>已付款</option><option>已撤回</option>
         </select>
         <select class="form-select" id="filterOverdue">
           <option value="">全部状态</option><option>逾期</option><option>正常</option>
@@ -45,6 +45,7 @@
       <div id="detailContent"></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal()">关闭</button>
+        <button class="btn btn-danger" id="withdrawBtn" onclick="withdrawRecord()" style="display:none">撤回</button>
         <button class="btn btn-primary" id="advanceBtn" onclick="advanceProgress()">推进</button>
       </div>
     </div>
@@ -143,13 +144,20 @@
       `;
 
       const progress = f['当前进度'];
+      const user = getCurrentUser();
       const advBtn = document.getElementById('advanceBtn');
-      if (progress === '已付款') {
+      const withdrawBtn = document.getElementById('withdrawBtn');
+
+      const terminated = progress === '已付款' || progress === '已撤回';
+      if (terminated) {
         advBtn.style.display = 'none';
+        withdrawBtn.style.display = 'none';
       } else {
         advBtn.style.display = '';
         const nextIdx = PROGRESS_FLOW.indexOf(progress) + 1;
         advBtn.textContent = '推进至: ' + (PROGRESS_FLOW[nextIdx] || '');
+        const canWithdraw = user.account === f['提交人'] || isAdmin();
+        withdrawBtn.style.display = canWithdraw ? '' : 'none';
       }
 
       document.getElementById('detailModal').classList.add('show');
@@ -157,6 +165,28 @@
 
     function closeModal() {
       document.getElementById('detailModal').classList.remove('show');
+    }
+
+    async function withdrawRecord() {
+      if (!currentRecord) return;
+      const f = currentRecord.fields;
+      const user = getCurrentUser();
+      if (f['当前进度'] === '已付款' || f['当前进度'] === '已撤回') return;
+      if (user.account !== f['提交人'] && !isAdmin()) { showToast('无权限撤回', 'error'); return; }
+      if (!confirm(`确认撤回编号 ${f['编号']} 的费用提报？`)) return;
+      try {
+        await teableUpdate(TABLE_LEDGER, currentRecord.id, {
+          '当前进度': '已撤回',
+          '备注': (f['备注'] ? f['备注'] + ' | ' : '') + `撤回于 ${new Date().toLocaleString('zh-CN')}`,
+        });
+        showToast('已撤回');
+        trackAction('撤回台账:' + f['编号'], 'ledger.html');
+        closeModal();
+        allLedgers = await teableGet(TABLE_LEDGER, true);
+        renderTable();
+      } catch (e) {
+        showToast('撤回失败: ' + e.message, 'error');
+      }
     }
 
     async function advanceProgress() {
