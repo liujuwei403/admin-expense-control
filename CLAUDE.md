@@ -39,6 +39,9 @@ cd public && python -m http.server 8080
 # 或
 npx serve public
 
+# 运行纯函数单元测试（无需浏览器/网络）
+node test/unit.js
+
 # 一次性 Teable 建表脚本
 node create-tables.js
 ```
@@ -48,31 +51,32 @@ node create-tables.js
 - GitHub Secrets: `TEABLE_TOKEN`
 - 仓库 URL: https://github.com/liujuwei403/admin-expense-control
 - 线上 URL: https://liujuwei403.github.io/admin-expense-control/
-- **本地 master 推线上 main**：`git push origin master:main`
+- **本地 main 推线上 main**：`git push origin main`
 
 ## 目录结构
 
 | 目录 | 用途 |
 |------|------|
-| `public/` | 开发源码（修改这里），每次改完 `cp public/* docs/` 同步 |
-| `docs/` | GitHub Pages 部署源，Token 保持占位符 `REMOVED_TOKEN` |
+| `public/` | 开发源码（**永远改这里**），每次改完同步到 `docs/` |
+| `docs/` | GitHub Pages 部署源，`api.js` 里 `TEABLE_TOKEN` 保持 `REMOVED_TOKEN` 占位符 |
 | `fc-backend/` | FC 后端 Node.js 源码（`index.js` + `package.json`），改完打包 `sso-backend.zip` 让用户上传到阿里云 FC 控制台 |
+| `test/` | Node.js 单元测试，`test/unit.js` 测试 api.js 纯函数（40 个用例） |
 | `alading/` | 内网备选方案：单文件 Vue 3 + Tailwind 测试页 + Dify 工作流 DSL |
 | `create-tables.js` | 一次性 Teable 初始化脚本 |
 
 ## 页面路由
 
-| 文件 | 功能 |
-|------|------|
-| `index.html` | 纯 SSO 跳转页（无手动登录表单） — 已登录 → home；带 token → 验证；否则跳 SSO |
-| `home.html` | 首页仪表盘 |
-| `submit.html` | 费用提报表单（多场景并行提报，见下文） |
-| `ledger.html` | 费用台账列表 |
-| `approve.html` | 审批中心 |
-| `config.html` | 场景配置查看（只读 Ref Base） |
-| `admin.html` | 管理后台（仅 `role === '管理员'`） |
+| 文件 | 功能 | 权限守卫 |
+|------|------|---------|
+| `index.html` | 纯 SSO 跳转页 — 已登录 → home；带 token → 验证；否则跳 SSO | 无 |
+| `home.html` | 首页仪表盘 | `requireLogin()` |
+| `submit.html` | 费用提报表单（多场景并行提报） | `requireLogin()` |
+| `ledger.html` | 费用台账列表 | `requireLogin()` |
+| `approve.html` | 审批中心 | `requireLogin()` |
+| `config.html` | 场景配置查看（只读 Ref Base） | `requireLogin()` |
+| `admin.html` | 管理后台 | `requireLogin()` + `isAdmin()`（非管理员跳 home） |
 
-所有非 `index.html` 页面必须有 `<aside id="sidebar">` + `<header id="topbar">`，`<script>` 顶部调用 `requireLogin()` 和 `renderNav('当前页面.html')`。
+所有非 `index.html` 页面必须有 `<aside id="sidebar">` + `<header id="topbar">`，`<script>` 顶部调用 `requireLogin()` 和 `renderNav('当前页面.html')`。**admin.html 还需在 requireLogin 后立即调用 isAdmin() 检查。**
 
 ## submit.html — 多场景提报架构
 
@@ -113,10 +117,12 @@ debouncedLLM      // { sid: Function } 每场景的 debounce LLM 调用
 - 端点：`http://ai-service.tal.com/openai-compatible/v1/chat/completions`
 - 模型：`gpt-5-chat`，需加 `system` message
 - Token：`Bearer 300000485:61b228c575d42cbd37a266636c5b7364`
-- 返回 `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}`，失败时降级正则解析，仍失败则提示手动填写
+- 返回 `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD"}`，失败时降级 `parseBenefitDates()` 正则解析，仍失败则提示手动填写
 
 ### 提交逻辑
-`submitExpense()` 一次性取台账最大编号，循环所有 `selectedSceneIds`，每个场景分别：上传附件 → `teableCreate(TABLE_LEDGER)` → `teableCreate(TABLE_SUBMIT)`。
+`submitExpense()` 提交前校验：必填事由、必须上传发票、**金额不得为负数**。一次性取台账最大编号，循环所有 `selectedSceneIds`，每个场景分别：上传附件 → `teableCreate(TABLE_LEDGER)` → `teableCreate(TABLE_SUBMIT)`。
+
+**注意**：场景配置表中超出 `KNOWN_FK` 集合的额外展示字段（`付款频次`、`是否需要预提` 等）仅用于费控映射区域只读展示，**不写入 TABLE_SUBMIT**（TABLE_SUBMIT 无对应列）。
 
 ## api.js 核心模块
 
@@ -136,7 +142,7 @@ debouncedLLM      // { sid: Function } 每场景的 debounce LLM 调用
 
 **导航渲染（renderNav）**
 - `renderNav(activePage)` — 渲染侧边栏 + topbar，并将 `#sidebar-edge-toggle` 浮动按钮 append 到 `document.body`（仅首次调用时创建）
-- topbar 右侧包含：用户头像（姓名首字）+ 昵称 + 退出按钮；侧边栏底部不再有用户信息
+- topbar 右侧包含：用户头像（姓名首字）+ 昵称 + 退出按钮
 - 初始化时读取 `localStorage.sidebar_collapsed`，恢复折叠状态
 
 **侧边栏折叠**
@@ -146,8 +152,8 @@ debouncedLLM      // { sid: Function } 每场景的 debounce LLM 调用
 
 **AI OCR（经 FC 后端代理 PaddleOCR）**
 - `ocrVatInvoice(file)` — 入参是 **File 对象**，带 `sso_jwt` 调 FC `/ocr`，传 `{fileBase64, fileType, jwt}`。FC 调 PaddleOCR 并运行 `parseInvoiceTexts` 解析，返回 `{invoiceType, totalAmount, taxRate, sellerName, purchaserName}`
-- `parseInvoiceTexts(texts)` — FC 侧和前端侧各有一份同逻辑的实现；FC 侧是权威执行路径
-- `submit.html:applyOcrResult()` 里的 typeMap 对 `增值税电子专用发票` 等规范值做二次映射到下拉选项
+- `parseInvoiceTexts(texts)` — FC 侧和前端侧各有一份同逻辑的实现（FC 侧是权威执行路径）。发票类型匹配用 `/电子/` 而非 `/电子发票/`，因为"增值税电子专用发票"字符串中"电子"与"发票"不相邻
+- `submit.html:applyOcrResult()` 里的 typeMap 对 OCR 返回的规范值做二次映射到下拉选项
 
 **Teable 附件上传（三步法）**
 - `teableUploadAttachment(file)` — ① POST `/api/attachments/signature`（`{type:2, contentType, contentLength}`）拿预签名 URL；② PUT 文件到腾讯云 COS；③ POST `/api/attachments/notify/{token}` 注册完成
@@ -155,8 +161,8 @@ debouncedLLM      // { sid: Function } 每场景的 debounce LLM 调用
 
 **工具函数**
 - `formatDate` / `formatMoney` / `statusBadge` / `showToast` / `renderNav` / `trackAction`
-- `genLedgerNo()` — 生成 `BX{YYYYMMDD}{4 位序号}`
-- `parseBenefitDates(description)` — 正则解析日期（submit.html 已改用 LLM，其他页面仍可用）
+- `genLedgerNo()` — 生成 `BX{YYYYMMDD}{4 位随机序号}`（提交时以台账最大编号 +1 为准，此函数已弃用）
+- `parseBenefitDates(description)` — 正则解析日期，支持 ISO、中文年月日、相对词（本月/去年）、季度（Q1/第二季度）、上下半年
 - `checkOverdue(record)` / `debounce(fn, ms)`
 
 ## style.css — 布局 CSS 变量体系
@@ -190,30 +196,41 @@ Compress-Archive -Force -Path fc-backend/index.js, fc-backend/package.json -Dest
 ## 数据流与权限
 
 ### 台账进度流转
-`待预提 → 预提完成 → 待收账单 → 已收账单 → 费控提报中 → 费控提报完成 → 待付款 → 已付款`
+```
+待预提 → 预提完成 → 待收账单 → 已收账单 → 费控提报中 → 费控提报完成 → 待付款 → 已付款
+```
+任意非「已付款」状态均可被提交人本人或管理员撤回，进度置为**「已撤回」**（终态，不可推进）。审批驳回时进度退回「待预提」重启流程。
+
+`PROGRESS_FLOW` 数组仅包含正向 8 个状态，不含「已撤回」；`STATUS_COLORS` 中「已撤回」对应灰色 `#6b7280`。
 
 ### 用户角色
-- `员工`：提报 + 看自己的台账
-- `审批人`：上述 + 审批中心
-- `管理员`：上述 + 管理后台 + 绕过场景过滤
+- `员工`：提报 + 看自己的台账 + 撤回自己的提报
+- `审批人`：上述 + 审批中心 + 推进台账进度
+- `管理员`：上述 + 管理后台 + 绕过场景过滤 + 撤回任意提报
+
+### 页面级权限拦截
+- 所有页面：`requireLogin()` — 未登录跳 index.html → SSO
+- `admin.html`：额外 `isAdmin()` — 非管理员跳 home.html
+- `approve.html:doApprove()`：`isApprover()` — 普通员工调用时返回 error toast
+- `ledger.html:advanceProgress()`：`isApprover()` — 普通员工无法推进进度
+- `ledger.html:withdrawRecord()`：`user.account === f['提交人'] || isAdmin()`
 
 ### 场景过滤规则（submit.html）
 登录用户的 `workcode`（来自 SSO JWT payload）需与场景配置表的 `负责人.title` 或 `跟进人[].title` 尾部 "-工号" 匹配，否则该场景不可见。`isApprover()` 绕过过滤。
 
 工号提取：`title.slice(title.lastIndexOf('-') + 1)`。`跟进人` 字段必须是**数组类型**，单值时匹配会被忽略。
 
-**审批驳回**：驳回时进度退回 `待预提`（最初状态），整个流程重启。
-
 ## 关键约定
 
 - Teable API 一律 `fieldKeyType=name`（字段名而非 ID）
 - 写操作后自动 `cacheClear(tableId)`，下次读强刷
 - `REF_CONFIG_TABLE` 属于另一个只读 Base，**不得写入**
-- 修改 `public/` 后必须 `cp public/* docs/` 同步（`docs/api.js` 里 `TEABLE_TOKEN` 保持 `REMOVED_TOKEN` 占位符）
+- 修改 `public/` 后必须同步 `docs/`（用 Edit 工具逐文件同步，不要用 `cp *` 覆盖，否则会清掉 `docs/api.js` 的 Token 占位符）
 - 新建非登录页：HTML 必须有 `id="sidebar"` 和 `id="topbar"`；`<script>` 顶部 `requireLogin()` 和 `renderNav('xxx.html')`
 - `submit.html` 的"是否关联项目"（`s_linkProject`）是**派生字段**，由场景配置的 `费控战斗单元` 是否有值自动计算，不可手动填写
 - `teableGet` 返回最多 1000 条；`teableGetWithView` 返回最多 200 条（用于场景配置等小数据集）
 - submit.html 场景块字段 ID 格式：`{fieldName}-{sid}`，`sid = sceneId.replace(/[^a-z0-9]/gi, '_')`
+- 场景配置表的额外展示字段（KNOWN_FK 集合之外的字段）**只读展示，禁止写入 TABLE_SUBMIT**
 
 ## 备选方案（alading/）
 
