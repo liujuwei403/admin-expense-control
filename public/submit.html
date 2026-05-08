@@ -747,13 +747,6 @@
 
           btn.textContent = `提交中 (${i+1}/${total})...`;
 
-          // 收集本场景动态额外字段的值
-          const extraFkData = {};
-          (extraFkFieldNames[sid] || []).forEach((name, idx) => {
-            const el = document.getElementById(`s_extra_${sid}_${idx}`);
-            if (el && el.value) extraFkData[name] = el.value;
-          });
-
           await teableCreate(TABLE_LEDGER, {
             '编号': ledgerNo,
             '账期': document.getElementById('s_period-' + sid).value || new Date().toISOString(),
@@ -800,7 +793,6 @@
             '场景配置ID': sceneId,
             '台账编号': String(ledgerNo),
             'OCR结果': ocrRawResults[sceneId] || '',
-            ...extraFkData,
           });
 
           trackAction('提交费用:' + feeType + '-' + sceneName, 'submit.html');
