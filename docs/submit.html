@@ -713,6 +713,8 @@
         const reason = document.getElementById('s_reason-' + sid)?.value.trim();
         if (!reason) { showToast('请填写每个场景的事由描述', 'error'); return; }
         if (!invoiceFiles[sceneId]) { showToast('请为每个场景上传发票', 'error'); return; }
+        const amt = parseFloat(document.getElementById('s_amount-' + sid)?.value);
+        if (isNaN(amt) || amt < 0) { showToast('金额不能为负数或空', 'error'); return; }
       }
 
       const user = getCurrentUser();

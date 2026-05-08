@@ -68,6 +68,7 @@
   <script src="api.js"></script>
   <script>
     if (!requireLogin()) throw '';
+    if (!isAdmin()) { showToast('无权限访问管理后台', 'error'); setTimeout(() => location.href = 'home.html', 1000); throw ''; }
     renderNav('admin.html');
 
     let allUsers = [];

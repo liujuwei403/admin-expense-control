@@ -69,8 +69,8 @@ function parseInvoiceTexts(texts) {
   let invoiceType = '';
   const t = lines.filter(l => /电子发票|增值税|专用发票|普通发票/.test(l))
     .join('').replace(/[\s（）()]/g, '');
-  if (/电子发票/.test(t) && /专用发票/.test(t)) invoiceType = '增值税电子专用发票';
-  else if (/电子发票/.test(t) && /普通发票/.test(t)) invoiceType = '增值税电子普通发票';
+  if (/电子/.test(t) && /专用发票/.test(t)) invoiceType = '增值税电子专用发票';
+  else if (/电子/.test(t) && /普通发票/.test(t)) invoiceType = '增值税电子普通发票';
   else if (/专用发票/.test(t)) invoiceType = '增值税专用发票';
   else if (/普通发票/.test(t)) invoiceType = '增值税普通发票';
 

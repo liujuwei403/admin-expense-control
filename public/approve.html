@@ -148,6 +148,7 @@
 
     async function doApprove(action) {
       if (!currentRecord) return;
+      if (!isApprover()) { showToast('无审批权限', 'error'); return; }
       const remark = document.getElementById('approveRemark').value.trim();
 
       try {

@@ -161,6 +161,7 @@
 
     async function advanceProgress() {
       if (!currentRecord) return;
+      if (!isApprover()) { showToast('无权限推进进度', 'error'); return; }
       const f = currentRecord.fields;
       const curIdx = PROGRESS_FLOW.indexOf(f['当前进度']);
       if (curIdx < 0 || curIdx >= PROGRESS_FLOW.length - 1) return;
