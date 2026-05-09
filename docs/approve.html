@@ -15,6 +15,7 @@
         <button class="tab active" onclick="setFilter('all')">全部</button>
         <button class="tab" onclick="setFilter('pending')">待审批</button>
         <button class="tab" onclick="setFilter('done')">已处理</button>
+        <button class="tab" onclick="setFilter('rejected')">已驳回</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -53,16 +54,18 @@
     function setFilter(filter) {
       currentFilter = filter;
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab')[{ all: 0, pending: 1, done: 2 }[filter]].classList.add('active');
+      document.querySelectorAll('.tab')[{ all: 0, pending: 1, done: 2, rejected: 3 }[filter]].classList.add('active');
       renderList();
     }
 
     function renderList() {
-      const RELEVANT = [PENDING_STATE, ...FINAL_STATES];
+      const REJECTED_STATE = '已驳回待修改';
+      const RELEVANT = [PENDING_STATE, ...FINAL_STATES, REJECTED_STATE];
       let data = allLedgers.filter(r => RELEVANT.includes(r.fields['当前进度']));
 
-      if (currentFilter === 'pending') data = data.filter(r => r.fields['当前进度'] === PENDING_STATE);
-      if (currentFilter === 'done')    data = data.filter(r => FINAL_STATES.includes(r.fields['当前进度']));
+      if (currentFilter === 'pending')  data = data.filter(r => r.fields['当前进度'] === PENDING_STATE);
+      if (currentFilter === 'done')     data = data.filter(r => FINAL_STATES.includes(r.fields['当前进度']));
+      if (currentFilter === 'rejected') data = data.filter(r => r.fields['当前进度'] === REJECTED_STATE);
 
       data.sort((a, b) => (b.fields['编号'] || 0) - (a.fields['编号'] || 0));
 
@@ -75,11 +78,13 @@
 
       document.getElementById('approveBody').innerHTML = data.map(r => {
         const f = r.fields;
-        const isPending = f['当前进度'] === PENDING_STATE;
-        const actionBtn = isPending
+        const prog = f['当前进度'];
+        const actionBtn = prog === PENDING_STATE
           ? `<button class="btn btn-sm btn-danger"  onclick="doApprove('${r.id}','reject')">驳回</button>
              <button class="btn btn-sm btn-success" onclick="doApprove('${r.id}','approve')">通过</button>`
-          : `<span style="color:var(--success);font-size:12px">已处理</span>`;
+          : prog === '已驳回待修改'
+            ? `<span style="color:#ef4444;font-size:12px">等待修改</span>`
+            : `<span style="color:var(--success);font-size:12px">已处理</span>`;
         return `<tr>
           <td>${f['编号'] || '-'}</td>
           <td>${f['费用类型'] || '-'}</td>
