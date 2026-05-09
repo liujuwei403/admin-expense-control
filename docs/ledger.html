@@ -77,6 +77,11 @@
         <input type="file" id="edit_invoiceFile" accept="image/*,.pdf"
                style="font-size:13px;color:var(--text-muted)">
       </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">重新上传附件（可选，不传则保留原附件）</label>
+        <input type="file" id="edit_attachFile" accept="image/*,.pdf"
+               style="font-size:13px;color:var(--text-muted)">
+      </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeEditModal()">取消</button>
         <button class="btn btn-primary" id="editSaveBtn" onclick="saveEdit()">重新提交</button>
@@ -188,6 +193,7 @@
       } catch {}
 
       document.getElementById('edit_invoiceFile').value = '';
+      document.getElementById('edit_attachFile').value  = '';
       document.getElementById('editModal').classList.add('show');
     }
 
@@ -205,15 +211,26 @@
       btn.disabled = true; btn.textContent = '提交中...';
 
       try {
-        const fileInput = document.getElementById('edit_invoiceFile');
+        const invoiceInput = document.getElementById('edit_invoiceFile');
+        const attachInput  = document.getElementById('edit_attachFile');
         let invoiceAttachment = null;
-        if (fileInput.files[0]) {
-          if (fileInput.files[0].size > 5 * 1024 * 1024) {
+        let attachAttachment  = null;
+
+        if (invoiceInput.files[0]) {
+          if (invoiceInput.files[0].size > 5 * 1024 * 1024) {
             showToast('发票文件不能超过 5MB', 'error');
             btn.disabled = false; btn.textContent = '重新提交';
             return;
           }
-          invoiceAttachment = await teableUploadAttachment(fileInput.files[0]);
+          invoiceAttachment = await teableUploadAttachment(invoiceInput.files[0]);
+        }
+        if (attachInput.files[0]) {
+          if (attachInput.files[0].size > 5 * 1024 * 1024) {
+            showToast('附件不能超过 5MB', 'error');
+            btn.disabled = false; btn.textContent = '重新提交';
+            return;
+          }
+          attachAttachment = await teableUploadAttachment(attachInput.files[0]);
         }
 
         if (editingSubmitId) {
@@ -225,6 +242,7 @@
             '受益日期到': document.getElementById('edit_benefitTo').value || null,
           };
           if (invoiceAttachment) submitFields['发票图片'] = [invoiceAttachment];
+          if (attachAttachment)  submitFields['附件']     = [attachAttachment];
           await teableUpdate(TABLE_SUBMIT, editingSubmitId, submitFields);
         }
 
