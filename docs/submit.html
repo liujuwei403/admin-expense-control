@@ -752,7 +752,7 @@
             '账期': document.getElementById('s_period-' + sid).value || new Date().toISOString(),
             '付款金额': amount || 0,
             '预提/实付': isAccrual === '是' ? '预提' : '实付',
-            '当前进度': isAccrual === '是' ? '待预提' : '费控提报中',
+            '当前进度': '费控提报中',
             '提交人': user.account,
             '提交费控日期': new Date().toISOString(),
             '费用类型': feeType,

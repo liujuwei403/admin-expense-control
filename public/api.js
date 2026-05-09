@@ -531,7 +531,7 @@ function genLedgerNo() {
 function checkOverdue(record) {
   const f = record.fields;
   const progress = f['当前进度'];
-  if (progress === '已付款') return '正常';
+  if (progress === '已付款' || progress === '费控提报完成' || progress === '已撤回') return '正常';
   const deadline = f['付款截止日期'];
   if (!deadline) return '正常';
   return new Date(deadline) < new Date() ? '逾期' : '正常';
@@ -557,6 +557,7 @@ const STATUS_COLORS = {
   '待付款': '#f59e0b',
   '已付款': '#10b981',
   '已撤回': '#6b7280',
+  '已驳回待修改': '#ef4444',
 };
 
 function statusBadge(status) {
