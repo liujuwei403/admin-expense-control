@@ -90,7 +90,8 @@
         const f = r.fields;
         const od = checkOverdue(r);
         const progress = f['当前进度'];
-        const terminated = progress === '已撤回' || progress === '费控提报完成';
+        const OLD_TERMINAL = ['已付款','待付款','预提完成','待收账单','已收账单','待预提'];
+        const terminated = progress === '已撤回' || progress === '费控提报完成' || OLD_TERMINAL.includes(progress);
         const canWithdraw = !terminated && (user.account === f['提交人'] || isAdmin());
         const actionBtns = canWithdraw
           ? `<button class="btn btn-sm btn-danger" onclick="withdrawRecord('${r.id}')">撤回</button>`
