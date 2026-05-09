@@ -145,7 +145,7 @@
         const OLD_TERMINAL = ['已付款','待付款','预提完成','待收账单','已收账单','待预提'];
         const terminated = progress === '已撤回' || progress === '费控提报完成' || OLD_TERMINAL.includes(progress);
         const canWithdraw = !terminated && (user.account === f['提交人'] || isAdmin());
-        const canEdit     = progress === '已驳回待修改' && (user.account === f['提交人'] || isAdmin());
+        const canEdit     = !terminated && (user.account === f['提交人'] || isAdmin());
         const actionBtns = [
           canEdit     ? `<button class="btn btn-sm btn-primary" onclick="openEditModal('${r.id}')">修改</button>` : '',
           canWithdraw ? `<button class="btn btn-sm btn-danger"  onclick="withdrawRecord('${r.id}')">撤回</button>` : '',
