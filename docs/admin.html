@@ -15,6 +15,7 @@
         <button class="tab active" onclick="switchTab('users')">用户管理</button>
         <button class="tab" onclick="switchTab('stats')">统计报表</button>
         <button class="tab" onclick="switchTab('logs')">操作日志</button>
+        <button class="tab" onclick="switchTab('config')">场景配置</button>
       </div>
 
       <div id="panelUsers">
@@ -38,6 +39,19 @@
             <tbody id="logBody"></tbody>
           </table>
         </div>
+      </div>
+
+      <div id="panelConfig" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div>
+            <span style="font-size:15px;font-weight:600">场景配置表</span>
+            <span style="font-size:12px;color:var(--text-muted);margin-left:8px" id="configCount"></span>
+          </div>
+          <select class="form-select" id="configFilterType" style="width:auto" onchange="renderConfigs()">
+            <option value="">全部类型</option>
+          </select>
+        </div>
+        <div id="configList"></div>
       </div>
     </div>
   </main>
@@ -74,18 +88,25 @@
     let allUsers = [];
     let allLedgers = [];
     let allLogs = [];
+    let allConfigs = [];
     let editingId = null;
 
     (async () => {
       try {
-        [allUsers, allLedgers, allLogs] = await Promise.all([
+        [allUsers, allLedgers, allLogs, allConfigs] = await Promise.all([
           teableGet(TABLE_USER),
           teableGet(TABLE_LEDGER),
           teableGet(TABLE_LOG),
+          loadConfigRecords(true),
         ]);
         renderUsers();
         renderStats();
         renderLogs();
+        // 填充场景配置费用类型筛选
+        const types = [...new Set(allConfigs.map(r => r.fields['费用类型']).filter(Boolean))];
+        const sel = document.getElementById('configFilterType');
+        types.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; sel.appendChild(o); });
+        document.getElementById('configCount').textContent = `共 ${allConfigs.length} 条`;
       } catch (e) {
         showToast('加载数据失败: ' + e.message, 'error');
       }
@@ -93,11 +114,12 @@
 
     function switchTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      const idx = { users: 0, stats: 1, logs: 2 }[tab];
+      const idx = { users: 0, stats: 1, logs: 2, config: 3 }[tab];
       document.querySelectorAll('.tab')[idx].classList.add('active');
-      document.getElementById('panelUsers').style.display = tab === 'users' ? '' : 'none';
-      document.getElementById('panelStats').style.display = tab === 'stats' ? '' : 'none';
-      document.getElementById('panelLogs').style.display = tab === 'logs' ? '' : 'none';
+      document.getElementById('panelUsers').style.display  = tab === 'users'  ? '' : 'none';
+      document.getElementById('panelStats').style.display  = tab === 'stats'  ? '' : 'none';
+      document.getElementById('panelLogs').style.display   = tab === 'logs'   ? '' : 'none';
+      document.getElementById('panelConfig').style.display = tab === 'config' ? '' : 'none';
     }
 
     function renderUsers() {
@@ -127,7 +149,6 @@
         <div class="stat-card"><div class="stat-label">总金额</div><div class="stat-value primary">${formatMoney(totalAmount)}</div></div>
       `;
 
-      // 按类型统计
       const byType = {};
       allLedgers.forEach(r => {
         const t = r.fields['费用类型'] || '其他';
@@ -158,6 +179,47 @@
           <td>${f['页面'] || '-'}</td>
           <td>${f['操作'] || '-'}</td>
         </tr>`;
+      }).join('');
+    }
+
+    function renderConfigs() {
+      const fType = document.getElementById('configFilterType').value;
+      let data = allConfigs;
+      if (fType) data = data.filter(r => r.fields['费用类型'] === fType);
+
+      if (data.length === 0) {
+        document.getElementById('configList').innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:16px 0">暂无配置记录</div>';
+        return;
+      }
+
+      document.getElementById('configList').innerHTML = data.map(r => {
+        const f = r.fields;
+        const responsible = f['负责人']?.title || f['负责人'] || '-';
+        const follower = Array.isArray(f['跟进人']) ? f['跟进人'].map(u => u.title || u).join(', ') : (f['跟进人'] || '-');
+        return `<div class="config-card">
+          <div class="config-card-header">
+            <div class="config-card-title">${f['场景说明'] || '-'}</div>
+            <span class="config-card-type">${f['费用类型'] || '-'}</span>
+          </div>
+          <div class="config-card-body">
+            <span class="config-field-label">付款方式</span><span class="config-field-value">${f['付款方式'] || '-'}</span>
+            <span class="config-field-label">付款频次</span><span class="config-field-value">${f['付款频次'] || '-'}</span>
+            <span class="config-field-label">法律主体</span><span class="config-field-value">${f['法律主体'] || '-'}</span>
+            <span class="config-field-label">供应商</span><span class="config-field-value">${f['供应商/收款方'] || '-'}</span>
+            <span class="config-field-label">合同编号</span><span class="config-field-value">${f['合同编号'] || '-'}</span>
+            <span class="config-field-label">是否预提</span><span class="config-field-value">${f['是否需要预提'] || '-'}</span>
+            <span class="config-field-label">费控单据类型</span><span class="config-field-value">${f['费控单据类型'] || '-'}</span>
+            <span class="config-field-label">费控费用类型</span><span class="config-field-value">${f['费控费用类型'] || '-'}</span>
+            <span class="config-field-label">费控费用项目</span><span class="config-field-value">${f['费控费用项目'] || '-'}</span>
+            <span class="config-field-label">费控战斗单元</span><span class="config-field-value">${f['费控战斗单元'] || '-'}</span>
+            <span class="config-field-label">费控分摊部门</span><span class="config-field-value">${f['费控分摊部门'] || '-'}</span>
+            <span class="config-field-label">费控现金事务</span><span class="config-field-value">${f['费控现金事务'] || '-'}</span>
+            <span class="config-field-label">负责人</span><span class="config-field-value">${responsible}</span>
+            <span class="config-field-label">跟进人</span><span class="config-field-value">${follower}</span>
+            <span class="config-field-label">合同期限</span><span class="config-field-value">${formatDate(f['合同开始日期'])} ~ ${formatDate(f['合同结束日期'])}</span>
+            <span class="config-field-label">备注</span><span class="config-field-value">${f['备注'] || '-'}</span>
+          </div>
+        </div>`;
       }).join('');
     }
 
