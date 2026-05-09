@@ -39,12 +39,59 @@
     </div>
   </main>
 
+  <!-- 修改弹窗 -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal">
+      <div class="modal-title" id="editModalTitle">修改费用提报</div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">事由描述<span class="required">*</span></label>
+        <textarea class="form-textarea" id="edit_reason" rows="3"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="form-group">
+          <label class="form-label">金额（元）</label>
+          <input class="form-input" type="number" step="0.01" id="edit_amount">
+        </div>
+        <div class="form-group">
+          <label class="form-label">发票类型</label>
+          <select class="form-select" id="edit_invoiceType">
+            <option value="">待识别</option>
+            <option>电子发票（增值税专用发票）</option>
+            <option>电子发票（增值税普通发票）</option>
+            <option>增值税专用发票</option>
+            <option>增值税普通发票</option>
+            <option>其他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">受益日期从</label>
+          <input class="form-input" type="date" id="edit_benefitFrom">
+        </div>
+        <div class="form-group">
+          <label class="form-label">受益日期到</label>
+          <input class="form-input" type="date" id="edit_benefitTo">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">重新上传发票（可选，不传则保留原发票）</label>
+        <input type="file" id="edit_invoiceFile" accept="image/*,.pdf"
+               style="font-size:13px;color:var(--text-muted)">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeEditModal()">取消</button>
+        <button class="btn btn-primary" id="editSaveBtn" onclick="saveEdit()">重新提交</button>
+      </div>
+    </div>
+  </div>
+
   <script src="api.js"></script>
   <script>
     if (!requireLogin()) throw '';
     renderNav('ledger.html');
 
     let allLedgers = [];
+    let editingLedgerId = null;
+    let editingSubmitId = null;
 
     (async () => {
       try {
@@ -93,9 +140,11 @@
         const OLD_TERMINAL = ['已付款','待付款','预提完成','待收账单','已收账单','待预提'];
         const terminated = progress === '已撤回' || progress === '费控提报完成' || OLD_TERMINAL.includes(progress);
         const canWithdraw = !terminated && (user.account === f['提交人'] || isAdmin());
-        const actionBtns = canWithdraw
-          ? `<button class="btn btn-sm btn-danger" onclick="withdrawRecord('${r.id}')">撤回</button>`
-          : '-';
+        const canEdit     = progress === '已驳回待修改' && (user.account === f['提交人'] || isAdmin());
+        const actionBtns = [
+          canEdit     ? `<button class="btn btn-sm btn-primary" onclick="openEditModal('${r.id}')">修改</button>` : '',
+          canWithdraw ? `<button class="btn btn-sm btn-danger"  onclick="withdrawRecord('${r.id}')">撤回</button>` : '',
+        ].filter(Boolean).join('') || '-';
         return `<tr>
           <td>${f['编号'] || '-'}</td>
           <td>${f['费用类型'] || '-'}</td>
@@ -106,6 +155,95 @@
           <td style="white-space:nowrap">${actionBtns}</td>
         </tr>`;
       }).join('');
+    }
+
+    async function openEditModal(ledgerId) {
+      const record = allLedgers.find(r => r.id === ledgerId);
+      if (!record) return;
+      const f = record.fields;
+      editingLedgerId = ledgerId;
+      editingSubmitId = null;
+
+      document.getElementById('editModalTitle').textContent =
+        `修改提报 #${f['编号']} — ${f['费用场景说明'] || ''}`;
+
+      try {
+        const submits = await teableGet(TABLE_SUBMIT);
+        const match = submits.find(s => s.fields['台账编号'] === String(f['编号']));
+        if (match) {
+          editingSubmitId = match.id;
+          const sf = match.fields;
+          document.getElementById('edit_reason').value      = sf['事由描述'] || '';
+          document.getElementById('edit_amount').value      = sf['单价'] || f['付款金额'] || '';
+          document.getElementById('edit_invoiceType').value = sf['发票类型'] || '';
+          document.getElementById('edit_benefitFrom').value = sf['受益日期从'] || '';
+          document.getElementById('edit_benefitTo').value   = sf['受益日期到'] || '';
+        } else {
+          document.getElementById('edit_amount').value = f['付款金额'] || '';
+          document.getElementById('edit_reason').value = '';
+          document.getElementById('edit_invoiceType').value = '';
+          document.getElementById('edit_benefitFrom').value = '';
+          document.getElementById('edit_benefitTo').value   = '';
+        }
+      } catch {}
+
+      document.getElementById('edit_invoiceFile').value = '';
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('show');
+    }
+
+    async function saveEdit() {
+      const reason = document.getElementById('edit_reason').value.trim();
+      if (!reason) { showToast('请填写事由描述', 'error'); return; }
+      const amount = parseFloat(document.getElementById('edit_amount').value);
+      if (isNaN(amount) || amount < 0) { showToast('金额不能为空或负数', 'error'); return; }
+
+      const btn = document.getElementById('editSaveBtn');
+      btn.disabled = true; btn.textContent = '提交中...';
+
+      try {
+        const fileInput = document.getElementById('edit_invoiceFile');
+        let invoiceAttachment = null;
+        if (fileInput.files[0]) {
+          if (fileInput.files[0].size > 5 * 1024 * 1024) {
+            showToast('发票文件不能超过 5MB', 'error');
+            btn.disabled = false; btn.textContent = '重新提交';
+            return;
+          }
+          invoiceAttachment = await teableUploadAttachment(fileInput.files[0]);
+        }
+
+        if (editingSubmitId) {
+          const submitFields = {
+            '事由描述': reason,
+            '单价': amount,
+            '发票类型': document.getElementById('edit_invoiceType').value,
+            '受益日期从': document.getElementById('edit_benefitFrom').value || null,
+            '受益日期到': document.getElementById('edit_benefitTo').value || null,
+          };
+          if (invoiceAttachment) submitFields['发票图片'] = [invoiceAttachment];
+          await teableUpdate(TABLE_SUBMIT, editingSubmitId, submitFields);
+        }
+
+        await teableUpdate(TABLE_LEDGER, editingLedgerId, {
+          '付款金额': amount,
+          '当前进度': '费控提报中',
+          '备注': '',
+        });
+
+        showToast('已重新提交，等待审批');
+        trackAction('修改重提:' + editingLedgerId, 'ledger.html');
+        closeEditModal();
+        allLedgers = await teableGet(TABLE_LEDGER, true);
+        renderTable();
+      } catch (e) {
+        showToast('提交失败: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = '重新提交';
+      }
     }
 
     async function withdrawRecord(id) {
