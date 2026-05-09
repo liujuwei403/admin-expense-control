@@ -92,7 +92,7 @@ async function teableCreate(tableId, fields) {
   const res = await fetch(`${TEABLE_BASE}/api/table/${tableId}/record`, {
     method: 'POST',
     headers: HEADERS,
-    body: JSON.stringify({ fieldKeyType: 'name', records: [{ fields }] }),
+    body: JSON.stringify({ fieldKeyType: 'name', typecast: true, records: [{ fields }] }),
   });
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
@@ -106,7 +106,7 @@ async function teableUpdate(tableId, id, fields) {
   const res = await fetch(`${TEABLE_BASE}/api/table/${tableId}/record`, {
     method: 'PATCH',
     headers: HEADERS,
-    body: JSON.stringify({ fieldKeyType: 'name', records: [{ id, fields }] }),
+    body: JSON.stringify({ fieldKeyType: 'name', typecast: true, records: [{ id, fields }] }),
   });
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
