@@ -125,7 +125,10 @@
 
       let data = allLedgers;
       if (fType) data = data.filter(r => r.fields['费用类型'] === fType);
-      if (fProgress) data = data.filter(r => r.fields['当前进度'] === fProgress);
+      if (fProgress) data = data.filter(r => {
+        const ep = r.fields['单据编号'] ? '费控提报完成' : r.fields['当前进度'];
+        return ep === fProgress;
+      });
       if (fOverdue) data = data.filter(r => checkOverdue(r) === fOverdue);
 
       data.sort((a, b) => (b.fields['编号'] || 0) - (a.fields['编号'] || 0));
@@ -141,7 +144,8 @@
       document.getElementById('ledgerBody').innerHTML = data.map(r => {
         const f = r.fields;
         const od = checkOverdue(r);
-        const progress = f['当前进度'];
+        const hasDocNo   = !!f['单据编号'];
+        const progress   = hasDocNo ? '费控提报完成' : f['当前进度'];
         const OLD_TERMINAL = ['已付款','待付款','预提完成','待收账单','已收账单','待预提'];
         const terminated = progress === '已撤回' || progress === '费控提报完成' || OLD_TERMINAL.includes(progress);
         const canWithdraw = !terminated && (user.account === f['提交人'] || isAdmin());
@@ -155,7 +159,7 @@
           <td>${f['费用类型'] || '-'}</td>
           <td>${f['费用场景说明'] || '-'}</td>
           <td>${formatMoney(f['付款金额'])}</td>
-          <td>${statusBadge(f['当前进度'])}</td>
+          <td>${statusBadge(progress)}</td>
           <td>${f['提交人'] || '-'}</td>
           <td style="white-space:nowrap">${actionBtns}</td>
         </tr>`;
