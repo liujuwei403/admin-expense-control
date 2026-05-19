@@ -1,6 +1,7 @@
 // ─── Teable API 配置 ─────────────────────────────────────────────
 const TEABLE_BASE   = 'https://yach-teable.zhiyinlou.com';
 const TEABLE_TOKEN  = 'REMOVED_TOKEN';
+const TABLE_BASE_ID = 'bsefWaZi2Kv0QAIbi0O';
 const TABLE_LEDGER  = 'tbluIKIuJRIXIVbfPYM';
 const TABLE_SUBMIT  = 'tbl3uasnN8YG32UAZ6z';
 const TABLE_USER    = 'tbltScUHfP0Q10bw99N';
@@ -136,7 +137,7 @@ async function teableUploadAttachment(file) {
   const sigRes = await fetch(`${TEABLE_BASE}/api/attachments/signature`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${TEABLE_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 2, contentType, contentLength: file.size }),
+    body: JSON.stringify({ type: 1, baseId: TABLE_BASE_ID, contentType, contentLength: file.size }),
   });
   if (!sigRes.ok) {
     const text = await sigRes.text().catch(() => '');
@@ -353,17 +354,43 @@ function parseInvoiceTexts(texts) {
   const rate = joined.match(/([0-9]+(?:\.[0-9]+)?)\s*%/);
   if (rate) taxRate = (parseFloat(rate[1]) / 100).toFixed(2);
 
-  const findNameAfter = (anchorRe) => {
-    const idx = lines.findIndex(l => anchorRe.test(l));
-    if (idx < 0) return '';
-    for (let i = idx + 1; i < Math.min(idx + 8, lines.length); i++) {
+  const sellerAnchorIdx    = lines.findIndex(l => /销售方信息|销\s*售\s*方/.test(l));
+  const purchaserAnchorIdx = lines.findIndex(l => /购买方信息|购\s*买\s*方/.test(l));
+  const bothFound   = sellerAnchorIdx >= 0 && purchaserAnchorIdx >= 0;
+  const minAnchor   = bothFound ? Math.min(sellerAnchorIdx, purchaserAnchorIdx) : 0;
+  const maxAnchor   = bothFound ? Math.max(sellerAnchorIdx, purchaserAnchorIdx) : 0;
+  // 交错布局检测：两锚点之间无 "名称：" 行（OCR 按行读取两栏发票时出现）
+  const interleaved = bothFound &&
+    lines.slice(minAnchor + 1, maxAnchor).every(l => !/名\s*称\s*[：:]/.test(l));
+
+  const findNameAfter = (anchorIdx, skipFirst) => {
+    if (anchorIdx < 0) return '';
+    // 同行情况："销售方信息名称：xxx" 合并在一行时直接从锚点行提取
+    const onAnchor = lines[anchorIdx].match(/名\s*称\s*[：:]\s*(.+)/);
+    if (onAnchor) return onAnchor[1].trim();
+    let count = 0;
+    for (let i = anchorIdx + 1; i < Math.min(anchorIdx + 12, lines.length); i++) {
       const m = lines[i].match(/名\s*称\s*[：:]\s*(.+)/);
-      if (m) return m[1].trim();
+      if (m) {
+        count++;
+        if (!skipFirst || count >= 2) return m[1].trim();
+      }
     }
     return '';
   };
-  const sellerName    = findNameAfter(/销售方信息|销\s*售\s*方/);
-  const purchaserName = findNameAfter(/购买方信息|购\s*买\s*方/);
+  let sellerName    = findNameAfter(sellerAnchorIdx,    interleaved && sellerAnchorIdx    > purchaserAnchorIdx);
+  let purchaserName = findNameAfter(purchaserAnchorIdx, interleaved && purchaserAnchorIdx > sellerAnchorIdx);
+
+  // 锚点缺失兜底：电力/特殊发票无标准"销售方"标签时，按位置取前两个 名称：
+  if (!sellerName || !purchaserName) {
+    const allNames = lines
+      .map(l => { const m = l.match(/名\s*称\s*[：:]\s*(.+)/); return m ? m[1].trim() : null; })
+      .filter(Boolean);
+    if (allNames.length >= 2) {
+      if (!purchaserName) purchaserName = allNames[0];
+      if (!sellerName)    sellerName    = allNames[1];
+    }
+  }
 
   return { invoiceType, totalAmount, taxRate, sellerName, purchaserName };
 }
