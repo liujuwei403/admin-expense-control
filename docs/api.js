@@ -611,7 +611,7 @@ function renderNav(activePage) {
     { href: 'home.html', icon: 'home', label: '首页' },
     { href: 'submit.html', icon: 'edit', label: '费用提报' },
     { href: 'ledger.html', icon: 'book', label: '费用台账' },
-    { href: 'approve.html', icon: 'check-circle', label: '审批中心' },
+    { href: 'approve.html', icon: 'check-circle', label: '审批中心', needApprover: true },
     { href: 'admin.html', icon: 'shield', label: '管理后台', needAdmin: true },
   ];
 

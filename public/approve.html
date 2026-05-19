@@ -35,6 +35,7 @@
   <script>
     if (!requireLogin()) throw '';
     renderNav('approve.html');
+    if (!isApprover()) { window.location.href = 'home.html'; throw ''; }
 
     let allLedgers = [];
     let currentFilter = 'all';

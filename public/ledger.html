@@ -119,11 +119,13 @@
     document.getElementById('filterOverdue').addEventListener('change', renderTable);
 
     function renderTable() {
+      const user = getCurrentUser();
       const fType = document.getElementById('filterType').value;
       const fProgress = document.getElementById('filterProgress').value;
       const fOverdue = document.getElementById('filterOverdue').value;
 
       let data = allLedgers;
+      if (!isAdmin()) data = data.filter(r => r.fields['提交人'] === user.account);
       if (fType) data = data.filter(r => r.fields['费用类型'] === fType);
       if (fProgress) data = data.filter(r => {
         const ep = r.fields['单据编号'] ? '费控提报完成' : r.fields['当前进度'];
@@ -140,7 +142,6 @@
       }
       document.getElementById('emptyState').style.display = 'none';
 
-      const user = getCurrentUser();
       document.getElementById('ledgerBody').innerHTML = data.map(r => {
         const f = r.fields;
         const od = checkOverdue(r);
