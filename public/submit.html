@@ -787,6 +787,9 @@
             '发票图片': [invoiceAttachment],
             ...(attachAttachment ? { '附件': [attachAttachment] } : {}),
             '合同档案编号': document.getElementById('s_contract-' + sid).value,
+            '跟进人': (Array.isArray(record?.fields['跟进人'])
+              ? record.fields['跟进人'].map(u => u.title).join('、')
+              : ''),
             '付款方式': document.getElementById('s_payMethod').value,
             '创建人': user.account,
             '创建时间': new Date().toISOString(),
