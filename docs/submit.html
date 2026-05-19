@@ -786,6 +786,7 @@
             '受益日期到': document.getElementById('s_benefitTo-' + sid).value || null,
             '发票图片': [invoiceAttachment],
             ...(attachAttachment ? { '附件': [attachAttachment] } : {}),
+            '合同档案编号': document.getElementById('s_contract-' + sid).value,
             '付款方式': document.getElementById('s_payMethod').value,
             '创建人': user.account,
             '创建时间': new Date().toISOString(),
