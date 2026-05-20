@@ -89,6 +89,15 @@
     </div>
   </div>
 
+  <!-- 详情弹窗 -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal" style="max-width:760px">
+      <div class="modal-title" id="detailModalTitle">费用详情</div>
+      <div id="detailContent" style="font-size:13px;line-height:1.7"></div>
+      <div class="modal-footer" id="detailFooter"></div>
+    </div>
+  </div>
+
   <script src="api.js"></script>
   <script>
     if (!requireLogin()) throw '';
@@ -152,6 +161,7 @@
         const canWithdraw = !terminated && (user.account === f['提交人'] || isAdmin());
         const canEdit     = !terminated && (user.account === f['提交人'] || isAdmin());
         const actionBtns = [
+          `<button class="btn btn-sm btn-ghost" onclick="openDetailModal('${r.id}')">详情</button>`,
           canEdit     ? `<button class="btn btn-sm btn-primary" onclick="openEditModal('${r.id}')">修改</button>` : '',
           canWithdraw ? `<button class="btn btn-sm btn-danger"  onclick="withdrawRecord('${r.id}')">撤回</button>` : '',
         ].filter(Boolean).join('') || '-';
@@ -289,6 +299,131 @@
       } catch (e) {
         showToast('撤回失败: ' + e.message, 'error');
       }
+    }
+
+    // ─── 详情弹窗 ───────────────────────────────────────────────
+    function escDetail(v) {
+      if (v === null || v === undefined || v === '') return '<span style="color:var(--text-muted)">-</span>';
+      return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function detailField(label, value) {
+      return `<div><div style="color:var(--text-muted);font-size:12px;margin-bottom:2px">${label}</div><div>${value}</div></div>`;
+    }
+
+    function detailGroup(title, fields) {
+      return `<div style="margin-top:14px"><div style="font-weight:600;color:var(--text);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">${title}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 18px">${fields}</div></div>`;
+    }
+
+    function renderAttachments(arr) {
+      if (!Array.isArray(arr) || arr.length === 0) return '<span style="color:var(--text-muted)">无</span>';
+      return arr.map(a => {
+        const url = a.presignedUrl || '';
+        const sizeKB = a.size ? (a.size/1024).toFixed(1) + ' KB' : '';
+        return `<div style="margin-bottom:4px">📎 <a href="${url}" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:none">${escDetail(a.name)}</a> <small style="color:var(--text-muted)">${sizeKB}</small></div>`;
+      }).join('');
+    }
+
+    async function openDetailModal(ledgerId) {
+      const record = allLedgers.find(r => r.id === ledgerId);
+      if (!record) return;
+      const f = record.fields;
+      const user = getCurrentUser();
+
+      let sf = {};
+      try {
+        const submits = await teableGet(TABLE_SUBMIT);
+        const match = submits.find(s => s.fields['台账编号'] === String(f['编号']));
+        if (match) sf = match.fields;
+      } catch {}
+
+      const hasDocNo = !!f['单据编号'];
+      const progress = hasDocNo ? '费控提报完成' : f['当前进度'];
+
+      document.getElementById('detailModalTitle').textContent =
+        `费用详情 #${f['编号']} — ${f['费用场景说明'] || ''}`;
+
+      const reasonHtml = `<div style="grid-column:span 2"><div style="color:var(--text-muted);font-size:12px;margin-bottom:2px">事由描述</div><div style="white-space:pre-wrap">${escDetail(sf['事由描述'])}</div></div>`;
+
+      const html = [
+        detailGroup('基本信息',
+          detailField('编号', escDetail(f['编号'])) +
+          detailField('当前进度', statusBadge(progress)) +
+          detailField('付款金额', formatMoney(f['付款金额'])) +
+          detailField('提交人', escDetail(f['提交人'])) +
+          detailField('提交费控日期', f['提交费控日期'] ? new Date(f['提交费控日期']).toLocaleString('zh-CN') : '<span style="color:var(--text-muted)">-</span>') +
+          detailField('付款截止日期', escDetail(f['付款截止日期'] && new Date(f['付款截止日期']).toLocaleDateString('zh-CN'))) +
+          detailField('单据编号', escDetail(f['单据编号'])) +
+          detailField('账期', escDetail(f['账期'] && new Date(f['账期']).toLocaleDateString('zh-CN')))
+        ),
+        detailGroup('业务信息',
+          detailField('费用类型', escDetail(f['费用类型'])) +
+          detailField('场景说明', escDetail(f['费用场景说明'])) +
+          reasonHtml +
+          detailField('受益日期从', escDetail(sf['受益日期从'])) +
+          detailField('受益日期到', escDetail(sf['受益日期到'])) +
+          detailField('付款方式', escDetail(sf['付款方式'])) +
+          detailField('是否预提', escDetail(sf['是否预提'])) +
+          detailField('类型', escDetail(sf['类型'])) +
+          detailField('负责业务人', escDetail(f['负责业务人']))
+        ),
+        detailGroup('费控字段',
+          detailField('费控单据类型', escDetail(sf['费控单据类型'])) +
+          detailField('法律主体', escDetail(sf['法律主体'])) +
+          detailField('供应商/收款方', escDetail(sf['供应商/收款方'])) +
+          detailField('费控费用类型', escDetail(sf['费控费用类型'])) +
+          detailField('费控费用项目', escDetail(sf['费控费用项目'])) +
+          detailField('费控战斗单元', escDetail(sf['费控战斗单元'])) +
+          detailField('费控分摊部门', escDetail(sf['费控分摊部门'])) +
+          detailField('费控现金事务', escDetail(sf['费控现金事务'])) +
+          detailField('合同档案编号', escDetail(sf['合同档案编号'])) +
+          detailField('跟进人', escDetail(sf['跟进人']))
+        ),
+        detailGroup('发票信息',
+          detailField('发票类型', escDetail(sf['发票类型'])) +
+          detailField('税率', escDetail(sf['税率'])) +
+          detailField('纸质单据', escDetail(sf['纸质单据'])) +
+          detailField('是否员工垫付', escDetail(sf['是否员工垫付'])) +
+          detailField('是否关联项目', escDetail(sf['是否关联项目'])) +
+          detailField('费用承担期间', escDetail(sf['费用承担期间'] && new Date(sf['费用承担期间']).toLocaleDateString('zh-CN')))
+        ),
+        detailGroup('附件',
+          `<div style="grid-column:span 2"><div style="color:var(--text-muted);font-size:12px;margin-bottom:4px">发票图片</div>${renderAttachments(sf['发票图片'])}</div>` +
+          `<div style="grid-column:span 2"><div style="color:var(--text-muted);font-size:12px;margin-bottom:4px;margin-top:8px">附件</div>${renderAttachments(sf['附件'])}</div>`
+        ),
+        f['备注'] ? detailGroup('备注 / 审批意见',
+          `<div style="grid-column:span 2;white-space:pre-wrap">${escDetail(f['备注'])}</div>`
+        ) : '',
+      ].join('');
+
+      document.getElementById('detailContent').innerHTML = html;
+
+      // 底部按钮按权限渲染
+      const OLD_TERMINAL = ['已付款','待付款','预提完成','待收账单','已收账单','待预提'];
+      const terminated = progress === '已撤回' || progress === '费控提报完成' || OLD_TERMINAL.includes(progress);
+      const canOp = !terminated && (user.account === f['提交人'] || isAdmin());
+      const buttons = [
+        canOp ? `<button class="btn btn-primary" onclick="detailEdit('${ledgerId}')">修改</button>` : '',
+        canOp ? `<button class="btn btn-danger" onclick="detailWithdraw('${ledgerId}')">撤回</button>` : '',
+        `<button class="btn btn-ghost" onclick="closeDetailModal()">关闭</button>`,
+      ].filter(Boolean).join('');
+      document.getElementById('detailFooter').innerHTML = buttons;
+
+      document.getElementById('detailModal').classList.add('show');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.remove('show');
+    }
+
+    function detailEdit(id) {
+      closeDetailModal();
+      openEditModal(id);
+    }
+
+    function detailWithdraw(id) {
+      closeDetailModal();
+      withdrawRecord(id);
     }
   </script>
 </body>
